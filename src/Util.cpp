@@ -1,8 +1,12 @@
 #include "Util.h"
 
+#include <assert.h>
+
 uint32_t get_node_index(
     const uint32_t x, const uint32_t y, const uint32_t width
 ) {
+    assert(x < width);
+
     return y * width + x;
 }
 

@@ -97,8 +97,8 @@ public:
     }
 
     std::pair<uint32_t, uint32_t> get_rand_open_xy() {
-        std::uniform_int_distribution<> rng_w(0, width);
-        std::uniform_int_distribution<> rng_h(0, height);
+        std::uniform_int_distribution<> rng_w(0, width - 1);
+        std::uniform_int_distribution<> rng_h(0, height - 1);
 
         uint32_t x;
         uint32_t y;
@@ -141,7 +141,7 @@ public:
 
         map.draw_map_to_frame(tiles);
 
-        auto view = registry.view<const Pos>();
+        const auto view {registry.view<const Pos>()};
 
         for (const auto &[entity, pos]: view.each()) {
             const uint32_t i = get_node_index(
