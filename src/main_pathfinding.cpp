@@ -4,9 +4,17 @@
 
 #include "Util.h"
 
+#include "imgui.h"
+#include "imgui_impl_sdl.h"
+#include "imgui_impl_sdlrenderer.h"
+
 #include <SDL2pp/SDL2pp.hh>
 
 #include <entt/entt.hpp>
+
+#if !SDL_VERSION_ATLEAST(2,0,17)
+#error This backend requires SDL 2.0.17+ because of SDL_RenderGeometry() function
+#endif
 
 // node_t represents a single node in the pathfinding graph. These are acquired
 // from interactions with map_t.

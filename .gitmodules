@@ -7,3 +7,6 @@
 [submodule "submodules/libSDL2pp"]
 	path = submodules/libSDL2pp
 	url = https://github.com/libSDL2pp/libSDL2pp.git
+[submodule "submodules/imgui"]
+	path = submodules/imgui
+	url = https://github.com/ocornut/imgui.git
