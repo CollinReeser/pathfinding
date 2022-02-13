@@ -16,30 +16,33 @@ TEST_BINARIES := $(TEST_BINARY_NAMES:%=$(BUILD_TEST_DIR)/%)
 
 all: $(BINARIES) $(TEST_BINARIES)
 
+# Versions:
+#
+# entt: git tag `v3.9.0`
+# googletest: git tag `release-1.11.0`
+# libSDL2pp: git tag `0.16.1`
+# imgui: git tag `v1.87`
+
 .PHONY: clean init
 init:
 	git submodule init
 	git submodule update
 	cd submodules/entt/build
-	git checkout v3.9.0
 	cmake .. -DENTT_BUILD_DOCS=ON -DENTT_BUILD_TESTING=ON
 	$(MAKE)
 	$(MAKE) test
 	cd ../../googletest
-	# git checkout release-1.11.0
 	mkdir -p build
 	cd build
 	cmake ..
 	$(MAKE)
 	cd ../../libSDL2pp
-	# git checkout 0.16.1
 	cmake . -DSDL2PP_WITH_WERROR=ON -DSDL2PP_CXXSTD=c++17 -DSDL2PP_STATIC=ON
 	$(MAKE)
 	cd ../..
 	mkdir src_imgui
 	mkdir obj_imgui
 	cd submodules/imgui
-	# git checkout v1.87
 	cp *.cpp *.h ../../src_imgui
 	cp backends/imgui_impl_sdl.* ../../src_imgui
 	cp backends/imgui_impl_sdlrenderer.* ../../src_imgui
