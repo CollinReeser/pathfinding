@@ -7,7 +7,7 @@
 
 .PHONY: clean init
 
-all: pathfinding test_unit
+all: main_pathfinding test_unit
 
 init:
 	git submodule init
@@ -22,18 +22,51 @@ init:
 	cmake ..
 	$(MAKE)
 	cd ../../..
+	mkdir -p obj
+	mkdir -p obj_test
+	mkdir -p build
 	$(MAKE)
 
 clean:
-	rm -f pathfinding
-	rm -f test_unit
+	rm -f main_*
+	rm -f test_*
+	rm obj/*
+	rm obj_test/*
 
-includes = -I submodules/entt/src -I submodules/googletest/googletest/include
-libs = -L submodules/googletest/build/lib
-links = -lgtest -lpthread
+INCLUDES := -I submodules/entt/src
+INCLUDES_TEST := -I submodules/googletest/googletest/include
 
-pathfinding: pathfinding.cpp
-	g++ -g -O2 -Werror -Wall $(includes) -std=c++17 pathfinding.cpp -o pathfinding
+SRC_DIR := src
+OBJ_DIR := obj
+SRC_FILES := $(wildcard $(SRC_DIR)/*.cpp)
+OBJ_FILES := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC_FILES))
 
-test_unit: test_unit.cpp
-	g++ -g -O2 -Werror -Wall $(includes) -std=c++17 test_unit.cpp -o test_unit $(libs) $(links)
+SRC_TEST_DIR := src_test
+OBJ_TEST_DIR := obj_test
+SRC_TEST_FILES := $(wildcard $(SRC_TEST_DIR)/*.cpp)
+OBJ_TEST_FILES := $(patsubst $(SRC_TEST_DIR)/%.cpp,$(OBJ_TEST_DIR)/%.o,$(SRC_TEST_FILES))
+SRC_TEST_FILES += $(SRC_FILES)
+OBJ_TEST_FILES += $(OBJ_FILES)
+
+# Remove from the test object files any main obj files that have `main()`s.
+OBJ_TEST_FILES := $(filter-out $(OBJ_DIR)/main_%.o, $(OBJ_TEST_FILES))
+
+CXXFLAGS := -std=c++17 -g -Wall -Werror -MMD
+
+LIB_TEST_FLAGS := -L submodules/googletest/build/lib
+LD_TEST_FLAGS := $(LIB_TEST_FLAGS) -lgtest -lpthread
+
+main_pathfinding: $(OBJ_FILES)
+	g++ -o build/$@ $^ $(LDFLAGS)
+
+test_unit: $(OBJ_TEST_FILES)
+	g++ -o build/$@ $^ $(LD_TEST_FLAGS)
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
+	g++ $(CXXFLAGS) $(INCLUDES) -c -o $@ $<
+
+$(OBJ_TEST_DIR)/%.o: $(SRC_TEST_DIR)/%.cpp
+	g++ $(CXXFLAGS) $(INCLUDES_TEST) -c -o $@ $<
+
+-include $(OBJ_FILES:.o=.d)
+-include $(OBJ_TEST_FILES:.o=.d)
