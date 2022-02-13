@@ -4,6 +4,8 @@
 
 #include "Util.h"
 
+#include <SDL2pp/SDL2pp.hh>
+
 #include <entt/entt.hpp>
 
 // node_t represents a single node in the pathfinding graph. These are acquired
@@ -183,6 +185,104 @@ int main(int argc, char** argv) {
     Frame frame(map, registry);
 
     frame.draw_frame();
+
+    const uint32_t SCREEN_WIDTH {640};
+    const uint32_t SCREEN_HEIGHT {480};
+
+    try {
+        // Init SDL; will be automatically deinitialized when the object is
+        // destroyed
+        SDL2pp::SDL sdl(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+
+        // Likewise, init SDL_ttf library
+        SDL2pp::SDLTTF sdl_ttf;
+
+        // Straightforward wrappers around corresponding SDL2 objects
+        // These take full care of proper object destruction and error checking
+        SDL2pp::Window window(
+            "libSDL2pp demo",
+            SDL_WINDOWPOS_UNDEFINED,
+            SDL_WINDOWPOS_UNDEFINED,
+            SCREEN_WIDTH,
+            SCREEN_HEIGHT,
+            SDL_WINDOW_RESIZABLE
+        );
+
+        SDL2pp::Renderer renderer(window, -1, SDL_RENDERER_ACCELERATED);
+        SDL2pp::Texture sprite1(
+            renderer,
+            SDL_PIXELFORMAT_ARGB8888,
+            SDL_TEXTUREACCESS_STATIC,
+            16, 16
+        );
+
+        // SDL_image support
+        SDL2pp::Texture sprite2(renderer, "assets/test.png");
+
+        SDL2pp::Font font("assets/Vera.ttf", 20); // SDL_ttf font
+
+        // Initialize audio mixer
+        SDL2pp::Mixer mixer(
+            MIX_DEFAULT_FREQUENCY,
+            MIX_DEFAULT_FORMAT,
+            MIX_DEFAULT_CHANNELS,
+            4096
+        );
+
+        // OGG sound file
+        SDL2pp::Chunk sound("assets/test.ogg");
+
+        // Create texture from surface containing text rendered by SDL_ttf
+        SDL2pp::Texture text(
+            renderer,
+            font.RenderText_Solid("Hello, world!",
+            SDL_Color{255, 255, 255, 255})
+        );
+
+        unsigned char pixels[16 * 16 * 4];
+
+        // Note proper constructor for Rect
+        sprite1.Update(SDL2pp::Rect(0, 0, 16, 16), pixels, 16 * 4);
+
+        // Most setter methods are chainable
+        renderer.SetLogicalSize(640, 480).SetDrawColor(0, 16, 32).Clear();
+
+        // Also note a safe way to specify null rects and points
+        renderer.Copy(sprite1, SDL2pp::NullOpt, SDL2pp::NullOpt);
+
+        // There are multiple convenient ways to construct e.g. a Rect;
+        // Objects provide extensive set of getters
+        renderer.Copy(
+            text,
+            SDL2pp::NullOpt,
+            SDL2pp::Rect(SDL2pp::Point(0, 0), text.GetSize())
+        );
+
+        // Copy() is overloaded, providing access to both SDL_RenderCopy and
+        // SDL_RenderCopyEx
+        renderer.Copy(sprite2, SDL2pp::NullOpt, SDL2pp::NullOpt, 45.0);
+
+        renderer.Present();
+
+        // Play our sound one time on a first available mixer channel
+        mixer.PlayChannel(-1, sound);
+
+        // You can still access wrapped C SDL types
+        // SDL_Renderer* sdl_renderer = renderer.Get();
+
+        // Of course, C SDL2 API is still perfectly valid
+        SDL_Delay(2000);
+
+    // All SDL objects are released at this point or if an error occurs
+    } catch (SDL2pp::Exception& e) {
+        // Exception stores SDL_GetError() result and name of function which
+        // failed
+        std::cerr << "Error in: " << e.GetSDLFunction() << std::endl;
+        std::cerr << "  Reason: " << e.GetSDLError() << std::endl;
+    } catch (std::exception& e) {
+        // This also works (e.g. "SDL_Init failed: No available video device")
+        std::cerr << e.what() << std::endl;
+    }
 
     return 0;
 }

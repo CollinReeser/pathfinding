@@ -29,6 +29,9 @@ init:
 	cd build
 	cmake ..
 	$(MAKE)
+	cd ../../libSDL2pp
+	cmake . -DSDL2PP_WITH_WERROR=ON -DSDL2PP_CXXSTD=c++17 -DSDL2PP_STATIC=ON
+	$(MAKE)
 	cd ../../..
 	mkdir -p obj
 	mkdir -p obj_test
@@ -54,7 +57,7 @@ OBJ_TEST_FILES := $(patsubst $(SRC_TEST_DIR)/%.cpp,$(OBJ_TEST_DIR)/%.o,$(SRC_TES
 SRC_TEST_FILES += $(SRC_FILES)
 OBJ_TEST_FILES += $(OBJ_FILES)
 
-INCLUDES := -I submodules/entt/src
+INCLUDES := -I submodules/entt/src `sdl2-config --cflags` -I submodules/libSDL2pp
 INCLUDES_TEST := -I src -I submodules/googletest/googletest/include
 
 # Remove from the test object files any main obj files that have `main()`s.
@@ -63,11 +66,14 @@ OBJ_TEST_FILES := $(filter-out $(OBJ_DIR)/main_%.o, $(OBJ_TEST_FILES))
 CXXFLAGS := -std=c++17 -g -O2 -Wall -Werror -MMD
 CXXFLAGS_TEST := -std=c++17 -g -Wall -Werror -MMD
 
+LIB_FLAGS := `sdl2-config --libs` -L submodules/libSDL2pp
+LD_FLAGS := $(LIB_FLAGS) -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_mixer -lSDL2pp
+
 LIB_TEST_FLAGS := -L submodules/googletest/build/lib
 LD_TEST_FLAGS := $(LIB_TEST_FLAGS) -lgtest -lpthread
 
 $(BINARIES): $(OBJ_FILES)
-	g++ -o $@ $^ $(LDFLAGS)
+	g++ -o $@ $^ $(LD_FLAGS)
 
 $(TEST_BINARIES): $(OBJ_TEST_FILES)
 	g++ -o $@ $^ $(LD_TEST_FLAGS)
