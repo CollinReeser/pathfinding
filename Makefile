@@ -1,3 +1,10 @@
+# Run each set of target commands in a single shell. This will make `cd` work
+# as expected.
+#
+# `.SHELLFLAGS += -e` says "fail after the first failed command in the list."
+.ONESHELL:
+.SHELLFLAGS += -e
+
 .PHONY: clean init
 
 all: pathfinding test_unit
@@ -13,6 +20,7 @@ init:
 	mkdir build
 	cd build
 	cmake ..
+	make
 
 clean:
 	rm -f pathfinding
