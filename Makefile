@@ -14,13 +14,15 @@ init:
 	git submodule update
 	cd submodules/entt/build
 	cmake .. -DENTT_BUILD_DOCS=ON -DENTT_BUILD_TESTING=ON
-	make
-	make test
+	$(MAKE)
+	$(MAKE) test
 	cd ../../googletest
-	mkdir build
+	mkdir -p build
 	cd build
 	cmake ..
-	make
+	$(MAKE)
+	cd ../../..
+	$(MAKE)
 
 clean:
 	rm -f pathfinding
