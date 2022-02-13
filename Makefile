@@ -5,6 +5,8 @@
 .ONESHELL:
 .SHELLFLAGS += -e
 
+.PHONY: clean realclean init runtests
+
 BUILD_DIR := build
 BUILD_TEST_DIR := build_test
 
@@ -14,16 +16,17 @@ BINARIES := $(BINARY_NAMES:%=$(BUILD_DIR)/%)
 TEST_BINARY_NAMES := test_unit
 TEST_BINARIES := $(TEST_BINARY_NAMES:%=$(BUILD_TEST_DIR)/%)
 
-all: $(BINARIES) $(TEST_BINARIES)
+all: $(BINARIES) tests
 
-# Versions:
+tests: $(TEST_BINARIES)
+
+# Submodule versions:
 #
 # entt: git tag `v3.9.0`
 # googletest: git tag `release-1.11.0`
 # libSDL2pp: git tag `0.16.1`
 # imgui: git tag `v1.87`
 
-.PHONY: clean init
 init:
 	git submodule init
 	git submodule update
@@ -40,8 +43,8 @@ init:
 	cmake . -DSDL2PP_WITH_WERROR=ON -DSDL2PP_CXXSTD=c++17 -DSDL2PP_STATIC=ON
 	$(MAKE)
 	cd ../..
-	mkdir src_imgui
-	mkdir obj_imgui
+	mkdir -p src_imgui
+	mkdir -p obj_imgui
 	cd submodules/imgui
 	cp *.cpp *.h ../../src_imgui
 	cp backends/imgui_impl_sdl.* ../../src_imgui
@@ -52,6 +55,15 @@ init:
 	mkdir -p build
 	mkdir -p build_test
 	$(MAKE)
+	$(MAKE) runtests
+
+runtests: tests
+	for test in $(TEST_BINARIES);\
+		do\
+			echo "Running" $$test "...";\
+			$$test || exit 1;\
+			echo "Passed" $$test;\
+		done
 
 clean:
 	rm -f build/*
@@ -59,6 +71,9 @@ clean:
 	rm -f obj/*
 	rm -f obj_imgui/*
 	rm -f obj_test/*
+
+realclean: clean
+	rm -rf submodules/*
 
 SRC_IMGUI_DIR := src_imgui
 OBJ_IMGUI_DIR := obj_imgui
