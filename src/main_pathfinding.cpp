@@ -194,8 +194,8 @@ int main(int argc, char** argv) {
 
     frame.draw_frame();
 
-    const uint32_t SCREEN_WIDTH {640};
-    const uint32_t SCREEN_HEIGHT {480};
+    const uint32_t SCREEN_WIDTH {640 * 2};
+    const uint32_t SCREEN_HEIGHT {480 * 2};
 
     try {
         // Init SDL; will be automatically deinitialized when the object is
@@ -217,6 +217,24 @@ int main(int argc, char** argv) {
         );
 
         SDL2pp::Renderer renderer(window, -1, SDL_RENDERER_ACCELERATED);
+
+        // Setup Dear ImGui context
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO();
+        (void)io;
+        ImGui::StyleColorsDark();
+
+        // Setup Platform/Renderer backends
+        ImGui_ImplSDL2_InitForSDLRenderer(window.Get(), renderer.Get());
+        ImGui_ImplSDLRenderer_Init(renderer.Get());
+
+        // SDL_ttf font
+        SDL2pp::Font sdl_font("assets/Vera.ttf", 20);
+
+        ImFont* imgui_font = io.Fonts->AddFontFromFileTTF("assets/Vera.ttf", 16.0f);
+        IM_ASSERT(imgui_font != NULL);
+
         SDL2pp::Texture sprite1(
             renderer,
             SDL_PIXELFORMAT_ARGB8888,
@@ -226,8 +244,6 @@ int main(int argc, char** argv) {
 
         // SDL_image support
         SDL2pp::Texture sprite2(renderer, "assets/test.png");
-
-        SDL2pp::Font font("assets/Vera.ttf", 20); // SDL_ttf font
 
         // Initialize audio mixer
         SDL2pp::Mixer mixer(
@@ -243,7 +259,7 @@ int main(int argc, char** argv) {
         // Create texture from surface containing text rendered by SDL_ttf
         SDL2pp::Texture text(
             renderer,
-            font.RenderText_Solid("Hello, world!",
+            sdl_font.RenderText_Solid("Hello, world!",
             SDL_Color{255, 255, 255, 255})
         );
 
@@ -253,7 +269,9 @@ int main(int argc, char** argv) {
         sprite1.Update(SDL2pp::Rect(0, 0, 16, 16), pixels, 16 * 4);
 
         // Most setter methods are chainable
-        renderer.SetLogicalSize(640, 480).SetDrawColor(0, 16, 32).Clear();
+        renderer.SetLogicalSize(
+            SCREEN_WIDTH, SCREEN_HEIGHT
+        ).SetDrawColor(0, 16, 32).Clear();
 
         // Also note a safe way to specify null rects and points
         renderer.Copy(sprite1, SDL2pp::NullOpt, SDL2pp::NullOpt);
@@ -279,7 +297,151 @@ int main(int argc, char** argv) {
         // SDL_Renderer* sdl_renderer = renderer.Get();
 
         // Of course, C SDL2 API is still perfectly valid
-        SDL_Delay(2000);
+        SDL_Delay(1000);
+
+        bool show_demo_window = false;
+        bool show_another_window = false;
+        ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+        int32_t click_x {-1};
+        int32_t click_y {-1};
+        uint8_t clicks {0};
+        uint8_t mouse_state {SDL_RELEASED};
+
+        bool done = false;
+        while (!done)
+        {
+            // Poll and handle events (inputs, window resize, etc.)
+            // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
+            // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application.
+            // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application.
+            // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
+            SDL_Event event;
+            while (SDL_PollEvent(&event)) {
+                ImGui_ImplSDL2_ProcessEvent(&event);
+                switch (event.type) {
+                case SDL_QUIT:
+                    done = true;
+                    break;
+
+                case SDL_WINDOWEVENT:
+                    if (
+                        event.window.event == SDL_WINDOWEVENT_CLOSE &&
+                        event.window.windowID == SDL_GetWindowID(window.Get())
+                    ) {
+                        done = true;
+                    }
+
+                    break;
+
+                case SDL_MOUSEBUTTONDOWN:
+                    click_x = event.button.x;
+                    click_y = event.button.y;
+                    mouse_state = event.button.state;
+                    clicks = event.button.clicks;
+
+                    if (clicks > 2) {
+                        clicks = ((clicks & 0b1) == 1) ? 1 : 2;
+                    }
+
+                    break;
+
+                default:
+                    break;
+                }
+            }
+
+            // Start the Dear ImGui frame
+            ImGui_ImplSDLRenderer_NewFrame();
+            ImGui_ImplSDL2_NewFrame();
+            ImGui::NewFrame();
+
+            // 1. Show the big demo window (Most of the sample code is in
+            // ImGui::ShowDemoWindow()! You can browse its code to learn more
+            // about Dear ImGui!).
+            if (show_demo_window) {
+                ImGui::ShowDemoWindow(&show_demo_window);
+            }
+
+            // 2. Show a simple window that we create ourselves. We use a
+            // Begin/End pair to created a named window.
+            {
+                static float f = 0.0f;
+                static int counter = 0;
+
+                // Create a window called "Hello, world!" and append into it.
+                ImGui::Begin("Hello, world!");
+
+                // Display some text (you can use a format strings too)
+                ImGui::Text("This is some useful text.");
+                // Edit bools storing our window open/close state
+                ImGui::Checkbox("Demo Window", &show_demo_window);
+                ImGui::Checkbox("Another Window", &show_another_window);
+
+                // Edit 1 float using a slider from 0.0f to 1.0f
+                ImGui::SliderFloat("float", &f, 0.0f, 1.0f);
+                // Edit 3 floats representing a color
+                ImGui::ColorEdit3("clear color", (float*)&clear_color);
+
+                // Buttons return true when clicked (most widgets return true
+                // when edited/activated)
+                if (ImGui::Button("Button")) {
+                    counter++;
+                }
+
+                ImGui::SameLine();
+                ImGui::Text("counter = %d", counter);
+
+                ImGui::Text("Mouse X = %d", click_x);
+                ImGui::Text("Mouse Y = %d", click_y);
+
+                switch (mouse_state) {
+                    case SDL_PRESSED:
+                        ImGui::Text("Mouse PRESSED");
+                        break;
+
+                    case SDL_RELEASED:
+                        ImGui::Text("Mouse RELEASED");
+                        break;
+
+                    default:
+                        break;
+                }
+
+                ImGui::Text("Mouse Clicks = %d", clicks);
+
+                ImGui::Text(
+                    "Application average %.3f ms/frame (%.1f FPS)",
+                    1000.0f / ImGui::GetIO().Framerate,
+                    ImGui::GetIO().Framerate
+                );
+                ImGui::End();
+            }
+
+            // 3. Show another simple window.
+            if (show_another_window) {
+                // Pass a pointer to our bool variable (the window will have a
+                // closing button that will clear the bool when clicked)
+                ImGui::Begin("Another Window", &show_another_window);
+                ImGui::Text("Hello from another window!");
+                if (ImGui::Button("Close Me")) {
+                    show_another_window = false;
+                }
+                ImGui::End();
+            }
+
+            // Rendering
+            ImGui::Render();
+            SDL_SetRenderDrawColor(
+                renderer.Get(),
+                (Uint8)(clear_color.x * 255),
+                (Uint8)(clear_color.y * 255),
+                (Uint8)(clear_color.z * 255),
+                (Uint8)(clear_color.w * 255)
+            );
+            SDL_RenderClear(renderer.Get());
+            ImGui_ImplSDLRenderer_RenderDrawData(ImGui::GetDrawData());
+            SDL_RenderPresent(renderer.Get());
+        }
 
     // All SDL objects are released at this point or if an error occurs
     } catch (SDL2pp::Exception& e) {
