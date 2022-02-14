@@ -235,12 +235,8 @@ int main(int argc, char** argv) {
         ImFont* imgui_font = io.Fonts->AddFontFromFileTTF("assets/Vera.ttf", 16.0f);
         IM_ASSERT(imgui_font != NULL);
 
-        SDL2pp::Texture sprite1(
-            renderer,
-            SDL_PIXELFORMAT_ARGB8888,
-            SDL_TEXTUREACCESS_STATIC,
-            16, 16
-        );
+        uint32_t sprite_1_width =  SCREEN_WIDTH / 8;
+        uint32_t sprite_1_height = SCREEN_HEIGHT / 8;
 
         // SDL_image support
         SDL2pp::Texture sprite2(renderer, "assets/test.png");
@@ -253,6 +249,139 @@ int main(int argc, char** argv) {
             4096
         );
 
+        const SDL_PixelFormat* const pixel_format = SDL_AllocFormat(
+            SDL_PIXELFORMAT_ARGB8888
+        );
+
+        unsigned char pixels[
+            sprite_1_width * sprite_1_height * pixel_format->BytesPerPixel
+        ];
+
+        unsigned char red {0};
+        unsigned char green {0};
+        unsigned char blue {0};
+        unsigned char alpha {128};
+        for (uint32_t i = 0; i < sprite_1_width * sprite_1_height; i++) {
+            if (i > 255 * 12 * 4) {
+                ((uint32_t*)pixels)[i] = SDL_MapRGBA(
+                    pixel_format, 128, 0, 128, alpha
+                );
+            }
+            else {
+                switch (i % 4) {
+                case 0:
+                    if (red < 255) {
+                        red++;
+                    }
+
+                    break;
+
+                case 1:
+                    if (red == 255 && green < 255) {
+                        green++;
+                    }
+
+                    break;
+
+                case 2:
+                    if (green == 255 && blue < 255) {
+                        blue++;
+                    }
+
+                    break;
+
+                case 3:
+                    if (blue == 255) {
+                        red = 0;
+                        green = 0;
+                        blue = 0;
+                        alpha = 0;
+                    }
+
+                    break;
+
+                default:
+                    assert(false);
+                }
+
+                ((uint32_t*)pixels)[i] = SDL_MapRGBA(
+                    pixel_format, red, green, blue, alpha
+                );
+            }
+        }
+
+        SDL2pp::Surface sprite1_surface(
+            pixels,
+            sprite_1_width,
+            sprite_1_height,
+            pixel_format->BitsPerPixel,
+            pixel_format->BytesPerPixel * sprite_1_width,
+            0,
+            0,
+            0,
+            0
+        );
+
+        SDL2pp::Texture sprite1(renderer, sprite1_surface);
+
+        // Also note a safe way to specify null rects and points
+        renderer.Copy(sprite1, SDL2pp::NullOpt, SDL2pp::NullOpt);
+        renderer.Copy(
+            sprite1,
+            SDL2pp::NullOpt,
+            SDL2pp::Rect(
+                SCREEN_WIDTH / 4,
+                SCREEN_HEIGHT / 4,
+                SCREEN_WIDTH / 2,
+                SCREEN_HEIGHT / 2
+            )
+        );
+
+        uint32_t pixels_2_width {255};
+        uint32_t pixels_2_height {255};
+        uint32_t pixels_2[pixels_2_width * pixels_2_height];
+
+        red = 128;
+        green = 0;
+        blue = 128;
+        alpha = 128;
+        for (uint32_t y = 0; y < pixels_2_height; y++) {
+            for (uint32_t x = 0; x < pixels_2_width; x++) {
+                pixels_2[y * pixels_2_width + x] = SDL_MapRGBA(
+                    pixel_format, red, green, blue, 255
+                );
+            }
+
+            red++;
+        }
+
+        SDL2pp::Surface sprite2_surface(
+            pixels_2,
+            pixels_2_width,
+            pixels_2_height,
+            pixel_format->BitsPerPixel,
+            pixel_format->BytesPerPixel * pixels_2_width,
+            0,
+            0,
+            0,
+            0
+        );
+
+        SDL2pp::Texture sprite2_surface_texture(renderer, sprite2_surface);
+        sprite2_surface_texture.SetBlendMode(SDL_BLENDMODE_BLEND);
+        sprite2_surface_texture.SetAlphaMod(192);
+
+        renderer.Copy(
+            sprite2_surface_texture,
+            SDL2pp::NullOpt,
+            SDL2pp::Rect(
+                SCREEN_WIDTH / 4 * 3,
+                SCREEN_HEIGHT / 8 * 3,
+                pixels_2_width,
+                pixels_2_height
+            )
+        );
+
         // OGG sound file
         SDL2pp::Chunk sound("assets/test.ogg");
 
@@ -263,25 +392,18 @@ int main(int argc, char** argv) {
             SDL_Color{255, 255, 255, 255})
         );
 
-        unsigned char pixels[16 * 16 * 4];
-
-        // Note proper constructor for Rect
-        sprite1.Update(SDL2pp::Rect(0, 0, 16, 16), pixels, 16 * 4);
-
-        // Most setter methods are chainable
-        renderer.SetLogicalSize(
-            SCREEN_WIDTH, SCREEN_HEIGHT
-        ).SetDrawColor(0, 16, 32).Clear();
-
-        // Also note a safe way to specify null rects and points
-        renderer.Copy(sprite1, SDL2pp::NullOpt, SDL2pp::NullOpt);
-
         // There are multiple convenient ways to construct e.g. a Rect;
         // Objects provide extensive set of getters
         renderer.Copy(
             text,
             SDL2pp::NullOpt,
             SDL2pp::Rect(SDL2pp::Point(0, 0), text.GetSize())
+        );
+
+        renderer.Copy(
+            text,
+            SDL2pp::NullOpt,
+            SDL2pp::Rect(32, 32, 512, 256)
         );
 
         // Copy() is overloaded, providing access to both SDL_RenderCopy and
@@ -293,11 +415,21 @@ int main(int argc, char** argv) {
         // Play our sound one time on a first available mixer channel
         mixer.PlayChannel(-1, sound);
 
-        // You can still access wrapped C SDL types
-        // SDL_Renderer* sdl_renderer = renderer.Get();
+        SDL_Event event;
+        bool wait_for_next_stage {true};
+        while (wait_for_next_stage)
+        while (SDL_PollEvent(&event)) {
+            switch (event.type) {
+            case SDL_KEYDOWN:
+                wait_for_next_stage = false;
+                break;
 
-        // Of course, C SDL2 API is still perfectly valid
-        SDL_Delay(1000);
+            default:
+                break;
+            }
+
+            SDL_Delay(1);
+        }
 
         bool show_demo_window = false;
         bool show_another_window = false;
@@ -311,10 +443,18 @@ int main(int argc, char** argv) {
         while (!done)
         {
             // Poll and handle events (inputs, window resize, etc.)
-            // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
-            // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application.
-            // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application.
-            // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
+            //
+            // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard
+            // flags to tell if dear imgui wants to use your inputs.
+            //
+            // - When io.WantCaptureMouse is true, do not dispatch mouse input
+            // data to your main application.
+            //
+            // - When io.WantCaptureKeyboard is true, do not dispatch keyboard
+            // input data to your main application.
+            //
+            // Generally you may always pass all inputs to dear imgui, and hide
+            // them from your application based on those two flags.
             SDL_Event event;
             while (SDL_PollEvent(&event)) {
                 ImGui_ImplSDL2_ProcessEvent(&event);
@@ -387,9 +527,12 @@ int main(int argc, char** argv) {
                 if (ImGui::Button("Button")) {
                     counter++;
                 }
-
                 ImGui::SameLine();
                 ImGui::Text("counter = %d", counter);
+
+                if (ImGui::Button("Next Stage")) {
+                    done = true;
+                }
 
                 ImGui::Text("Mouse X = %d", click_x);
                 ImGui::Text("Mouse Y = %d", click_y);
@@ -442,6 +585,11 @@ int main(int argc, char** argv) {
             ImGui_ImplSDLRenderer_RenderDrawData(ImGui::GetDrawData());
             SDL_RenderPresent(renderer.Get());
         }
+
+        SDL_RenderClear(renderer.Get());
+        SDL_RenderPresent(renderer.Get());
+
+        SDL_Delay(1000);
 
     // All SDL objects are released at this point or if an error occurs
     } catch (SDL2pp::Exception& e) {
