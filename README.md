@@ -30,10 +30,26 @@ elided in this build process (eg, generating submodule docs).
     - `pacman -S git`
     - `pacman -S mingw-w64-x86_64-make mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake`
     - `pacman -S mingw-w64-x86_64-SDL2 mingw-w64-x86_64-SDL2_gfx mingw-w64-x86_64-SDL2_image mingw-w64-x86_64-SDL2_mixer mingw-w64-x86_64-SDL2_ttf`
+5. Establish an alias to `mingw32-make`, eg:
+    - `echo 'alias make=/mingw64/bin/mingw32-make.exe' >> ~/.bashrc`
+    - `source ~/.bashrc`
 
 ## Quickstart
 
-Ensure above dependencies are installed.
+Ensure above dependencies are installed for the target platform.
+
+### Notes
+
+`make init` pulls in all submodule dependencies, builds them as appropriate to
+the platform, then builds the core project.
+
+Thereafter, `make` is sufficient to rebuild after any changes are made to the
+core project.
+
+Note that the build process is designed to take advantage of the `-jN` option
+for `make` (eg, `make -j8`), which can significantly improve build times
+relative to the choice of `N` and the count of available CPU cores on the build
+host.
 
 ### Linux Build
 
@@ -50,16 +66,6 @@ make init
 git clone <repo>
 make init-win
 ```
-
-### Note
-
-`make init` pulls in all submodule dependencies, builds them as relevant, then
-builds the core project.
-
-Thereafter, `make` is sufficient to build after any changes are made to the core
-project.
-
-Adding the `-jN` flag to `make` (eg, `make -j4`) can speed up build times.
 
 # Binaries
 
