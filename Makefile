@@ -5,7 +5,7 @@
 .ONESHELL:
 .SHELLFLAGS += -e
 
-.PHONY: clean realclean init runtests
+.PHONY: clean realclean init init-win tests runtests
 
 BUILD_DIR := build
 BUILD_TEST_DIR := build_test
@@ -20,83 +20,6 @@ all: $(BINARIES) tests
 
 tests: $(TEST_BINARIES)
 
-# Submodule versions:
-#
-# entt: git tag `v3.9.0`
-# googletest: git tag `release-1.11.0`
-# libSDL2pp: git tag `0.16.1`
-# imgui: git tag `v1.87`
-
-# Initialize project for Linux.
-init:
-	git submodule init
-	git submodule update
-	cd submodules/entt/build
-	cmake .. -DENTT_BUILD_DOCS=ON -DENTT_BUILD_TESTING=ON
-	$(MAKE)
-	$(MAKE) test
-	cd ../../googletest
-	mkdir -p build
-	cd build
-	cmake ..
-	$(MAKE)
-	cd ../../libSDL2pp
-	cmake . -DSDL2PP_WITH_WERROR=ON -DSDL2PP_CXXSTD=c++17 -DSDL2PP_STATIC=ON
-	$(MAKE)
-	cd ../..
-	mkdir -p src_imgui
-	mkdir -p obj_imgui
-	cd submodules/imgui
-	cp *.cpp *.h ../../src_imgui
-	cp backends/imgui_impl_sdl.* ../../src_imgui
-	cp backends/imgui_impl_sdlrenderer.* ../../src_imgui
-	cd ../..
-	mkdir -p obj
-	mkdir -p obj_test
-	mkdir -p build
-	mkdir -p build_test
-	$(MAKE)
-	$(MAKE) runtests
-
-# Initialize project for Windows.
-init-win:
-	git submodule init
-	git submodule update
-	cd submodules/entt/build
-	cmake .. -DENTT_BUILD_TESTING=ON -G "MinGW Makefiles"
-	$(MAKE)
-	$(MAKE) test
-	cd ../../googletest
-	mkdir -p build
-	cd build
-	cmake .. -G "MinGW Makefiles"
-	$(MAKE)
-	cd ../../libSDL2pp
-	cmake . -DSDL2PP_WITH_WERROR=ON -DSDL2PP_CXXSTD=c++17 -DSDL2PP_STATIC=ON -G "MinGW Makefiles"
-	$(MAKE)
-	cd ../..
-	mkdir -p src_imgui
-	mkdir -p obj_imgui
-	cd submodules/imgui
-	cp *.cpp *.h ../../src_imgui
-	cp backends/imgui_impl_sdl.* ../../src_imgui
-	cp backends/imgui_impl_sdlrenderer.* ../../src_imgui
-	cd ../..
-	mkdir -p obj
-	mkdir -p obj_test
-	mkdir -p build
-	mkdir -p build_test
-	$(MAKE)
-	$(MAKE) runtests
-
-runtests: tests
-	for test in $(TEST_BINARIES);\
-		do\
-			echo "Running" $$test "...";\
-			$$test || exit 1;\
-			echo "Passed" $$test;\
-		done
-
 clean:
 	rm -f build/*
 	rm -f build_test/*
@@ -106,6 +29,98 @@ clean:
 
 realclean: clean
 	rm -rf submodules/*
+
+# Submodule versions:
+#
+# entt: git tag `v3.9.0`
+# googletest: git tag `release-1.11.0`
+# libSDL2pp: git tag `0.16.1`
+# imgui: git tag `v1.87`
+#
+
+# Initialize project for Linux.
+init:
+	$(MAKE) _init-submodule-build
+	mkdir -p obj
+	mkdir -p obj_test
+	mkdir -p build
+	mkdir -p build_test
+	$(MAKE)
+	$(MAKE) runtests
+
+.PHONY: _init-submodule-build _submodule-update init-entt init-googletest init-libsdl2pp init-imgui
+
+_init-submodule-build: init-entt init-googletest init-libsdl2pp init-imgui
+
+_submodule-update:
+	git submodule init
+	git submodule update
+
+init-entt: _submodule-update
+	cd submodules/entt/build
+	cmake .. -DENTT_BUILD_DOCS=ON -DENTT_BUILD_TESTING=ON
+	$(MAKE)
+	$(MAKE) test
+
+init-win-entt: _submodule-update
+	cd submodules/entt/build
+	cmake .. -DENTT_BUILD_TESTING=ON -G "MinGW Makefiles"
+	$(MAKE)
+	$(MAKE) test
+
+init-googletest: _submodule-update
+	cd submodules/googletest
+	mkdir -p build
+	cd build
+	cmake ..
+	$(MAKE)
+
+init-win-googletest: _submodule-update
+	cd submodules/googletest
+	mkdir -p build
+	cd build
+	cmake .. -G "MinGW Makefiles"
+	$(MAKE)
+
+init-libsdl2pp: _submodule-update
+	cd submodules/libSDL2pp
+	cmake . -DSDL2PP_WITH_WERROR=ON -DSDL2PP_CXXSTD=c++17 -DSDL2PP_STATIC=ON
+	$(MAKE)
+
+init-win-libsdl2pp: _submodule-update
+	cd submodules/libSDL2pp
+	cmake . -DSDL2PP_WITH_WERROR=ON -DSDL2PP_CXXSTD=c++17 -DSDL2PP_STATIC=ON -G "MinGW Makefiles"
+	$(MAKE)
+
+init-imgui: _submodule-update
+	cd submodules/imgui
+	mkdir -p ../../src_imgui
+	mkdir -p ../../obj_imgui
+	cp *.cpp *.h ../../src_imgui
+	cp backends/imgui_impl_sdl.* ../../src_imgui
+	cp backends/imgui_impl_sdlrenderer.* ../../src_imgui
+
+# Initialize project for Windows.
+init-win:
+	$(MAKE) _init-win-submodule-build
+	mkdir -p obj
+	mkdir -p obj_test
+	mkdir -p build
+	mkdir -p build_test
+	$(MAKE)
+	$(MAKE) runtests
+
+.PHONY: _init-win-submodule-build init-win-entt init-win-googletest init-win-libsdl2pp
+
+_init-win-submodule-build: init-win-entt init-win-googletest init-win-libsdl2pp init-imgui
+
+runtests: tests
+	for test in $(TEST_BINARIES);\
+		do\
+			echo "Running" $$test "...";\
+			$$test || exit 1;\
+			echo "Passed" $$test;\
+		done
 
 SRC_IMGUI_DIR := src_imgui
 OBJ_IMGUI_DIR := obj_imgui
