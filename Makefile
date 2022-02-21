@@ -27,11 +27,43 @@ tests: $(TEST_BINARIES)
 # libSDL2pp: git tag `0.16.1`
 # imgui: git tag `v1.87`
 
+# Initialize project for Linux.
 init:
 	git submodule init
 	git submodule update
 	cd submodules/entt/build
 	cmake .. -DENTT_BUILD_DOCS=ON -DENTT_BUILD_TESTING=ON
+	$(MAKE)
+	$(MAKE) test
+	cd ../../googletest
+	mkdir -p build
+	cd build
+	cmake ..
+	$(MAKE)
+	cd ../../libSDL2pp
+	cmake . -DSDL2PP_WITH_WERROR=ON -DSDL2PP_CXXSTD=c++17 -DSDL2PP_STATIC=ON
+	$(MAKE)
+	cd ../..
+	mkdir -p src_imgui
+	mkdir -p obj_imgui
+	cd submodules/imgui
+	cp *.cpp *.h ../../src_imgui
+	cp backends/imgui_impl_sdl.* ../../src_imgui
+	cp backends/imgui_impl_sdlrenderer.* ../../src_imgui
+	cd ../..
+	mkdir -p obj
+	mkdir -p obj_test
+	mkdir -p build
+	mkdir -p build_test
+	$(MAKE)
+	$(MAKE) runtests
+
+# Initialize project for Windows.
+init-win:
+	git submodule init
+	git submodule update
+	cd submodules/entt/build
+	cmake .. -DENTT_BUILD_TESTING=ON
 	$(MAKE)
 	$(MAKE) test
 	cd ../../googletest
@@ -102,11 +134,9 @@ OBJ_TEST_FILES := $(filter-out $(OBJ_DIR)/main_%.o, $(OBJ_TEST_FILES))
 CXXFLAGS      := -std=c++17 -g -O2 -Wall -Werror -MMD
 CXXFLAGS_TEST := -std=c++17 -g     -Wall -Werror -MMD
 
-LIB_FLAGS := `sdl2-config --libs` -L submodules/libSDL2pp
-LD_FLAGS := $(LIB_FLAGS) -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_mixer -lSDL2pp
+LD_FLAGS := -L submodules/libSDL2pp -lSDL2pp `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer
 
-LIB_TEST_FLAGS := -L submodules/googletest/build/lib
-LD_TEST_FLAGS := $(LIB_TEST_FLAGS) -lgtest -lpthread
+LD_TEST_FLAGS := -L submodules/googletest/build/lib -lgtest -lpthread
 
 $(BINARIES): $(OBJ_IMGUI_FILES) $(OBJ_FILES)
 	g++ -o $@ $^ $(LD_FLAGS)
