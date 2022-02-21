@@ -1,4 +1,6 @@
+#include <chrono>
 #include <iostream>
+#include <sstream>
 
 #include "Draw.h"
 #include "Map.h"
@@ -154,8 +156,12 @@ void pathfind_gfx(
 
     uint8_t mouse_state {SDL_RELEASED};
 
-    // uint64_t sdl_ticks = SDL_GetTicks64();
     uint64_t frames {0};
+
+    auto start_frame {std::chrono::steady_clock::now()};
+    auto end_frame {std::chrono::steady_clock::now()};
+
+    std::chrono::microseconds frame_dur {1};
 
     bool done = false;
     while (!done) {
@@ -181,10 +187,6 @@ void pathfind_gfx(
                 x_mouse = event.motion.x;
                 y_mouse = event.motion.y;
 
-                std::cout
-                    << "Mouse [" << x_mouse << ", " << y_mouse << "]"
-                    << std::endl;
-
                 break;
 
             case SDL_MOUSEBUTTONDOWN:
@@ -197,22 +199,10 @@ void pathfind_gfx(
                     clicks = ((clicks & 0b1) == 1) ? 1 : 2;
                 }
 
-                std::cout
-                    << "Click [" << x_click << ", " << y_click << "]: State ["
-                    << (uint32_t)mouse_state << "]: Clicks ["
-                    << (uint32_t)clicks << "]"
-                    << std::endl;
-
                 break;
 
             case SDL_MOUSEBUTTONUP:
                 mouse_state = event.button.state;
-
-                std::cout
-                    << "Release ["
-                    << event.button.x << ", " << event.button.y << "]: State ["
-                    << (uint32_t)mouse_state << "]"
-                    << std::endl;
 
                 break;
 
@@ -314,11 +304,64 @@ void pathfind_gfx(
             }
         }
 
-        renderer.Present();
+        std::ostringstream oss_pft;
+        oss_pft << "Per-frame time (ms): " << frame_dur.count() / 1000;
+
+        SDL2pp::Texture text_frame_time(
+            renderer,
+            sdl_font.RenderText_Solid(
+                oss_pft.str().c_str(),
+                SDL_Color{0, 0, 255, 255}
+            )
+        );
+
+        const auto frame_time_size_point {text_frame_time.GetSize()};
+
+        renderer.Copy(
+            text_frame_time,
+            SDL2pp::NullOpt,
+            SDL2pp::Rect(
+                0, 0,
+                frame_time_size_point.GetX(),
+                frame_time_size_point.GetY()
+            )
+        );
+
+        std::ostringstream oss_fps;
+        oss_fps
+            << "FPS: "
+            << static_cast<uint32_t>(
+                (1000.0 / (frame_dur.count() / 1000.0))
+            );
+
+        SDL2pp::Texture text_fps(
+            renderer,
+            sdl_font.RenderText_Solid(
+                oss_fps.str().c_str(),
+                SDL_Color{0, 0, 255, 255}
+            )
+        );
+
+        renderer.Copy(
+            text_fps,
+            SDL2pp::NullOpt,
+            SDL2pp::Rect(
+                SDL2pp::Point(0, frame_time_size_point.GetY()),
+                text_fps.GetSize()
+            )
+        );
 
         ++frames;
 
-        SDL_Delay(10);
+        end_frame = std::chrono::steady_clock::now();
+
+        frame_dur = std::chrono::duration_cast<std::chrono::microseconds>(
+            end_frame - start_frame
+        );
+
+        renderer.Present();
+
+        start_frame = std::chrono::steady_clock::now();
     }
 
     SDL_Delay(1000);
