@@ -16,8 +16,315 @@
 #error This backend requires SDL 2.0.17+ because of SDL_RenderGeometry() function
 #endif
 
-const uint32_t SCREEN_WIDTH {640 * 2};
-const uint32_t SCREEN_HEIGHT {480 * 2};
+const uint32_t SCREEN_WIDTH {640};
+const uint32_t SCREEN_HEIGHT {480};
+
+void pathfind_gfx(
+    entt::registry &registry,
+    SDL2pp::SDL &sdl,
+    SDL2pp::Window &window,
+    SDL2pp::SDLTTF &sdl_ttf,
+    SDL2pp::Renderer &renderer,
+    SDL2pp::Mixer &mixer,
+    ImGuiIO &io,
+    SDL2pp::Font &sdl_font,
+    ImFont* imgui_font
+) {
+    const uint32_t sprite_width {16};
+    const uint32_t sprite_height {16};
+
+    const uint32_t map_width {SCREEN_WIDTH / sprite_width};
+    const uint32_t map_height {SCREEN_HEIGHT / sprite_height};
+
+    Pathfind<Map, MapNode> pathfind {};
+
+    Map map {Map::gen_rand_map(map_width, map_height)};
+
+    for (uint32_t i = 0; i < 100; ++i) {
+        const auto [x, y] = map.get_rand_open_xy();
+
+        const auto entity = registry.create();
+        registry.emplace<Pos>(entity, (float)x + 0.5f, (float)y + 0.5f);
+        registry.emplace<Pather>(entity);
+    }
+
+    Frame frame(map, registry);
+
+    frame.draw_frame();
+
+    const SDL_PixelFormat* const pixel_format = SDL_AllocFormat(
+        SDL_PIXELFORMAT_ARGB8888
+    );
+
+    unsigned char pix_obstacle[
+        sprite_width * sprite_height * pixel_format->BytesPerPixel
+    ];
+    unsigned char pix_open[
+        sprite_width * sprite_height * pixel_format->BytesPerPixel
+    ];
+    unsigned char pix_path[
+        sprite_width * sprite_height * pixel_format->BytesPerPixel
+    ];
+
+    for (uint32_t y = 0; y < sprite_height; y++) {
+        for (uint32_t x = 0; x < sprite_width; x++) {
+            reinterpret_cast<uint32_t*>(pix_obstacle)[
+                get_node_index(x, y, sprite_width)
+            ] = SDL_MapRGBA(
+                pixel_format,
+                255 /*= red*/,
+                0 /*= green*/,
+                0 /*= blue*/,
+                255 /*= alpha */
+            );
+        }
+    }
+    for (uint32_t y = 0; y < sprite_height; y++) {
+        for (uint32_t x = 0; x < sprite_width; x++) {
+            reinterpret_cast<uint32_t*>(pix_open)[
+                get_node_index(x, y, sprite_width)
+            ] = SDL_MapRGBA(
+                pixel_format,
+                200 /*= red*/,
+                200 /*= green*/,
+                200 /*= blue*/,
+                255 /*= alpha */
+            );
+        }
+    }
+    for (uint32_t y = 0; y < sprite_height; y++) {
+        for (uint32_t x = 0; x < sprite_width; x++) {
+            reinterpret_cast<uint32_t*>(pix_path)[
+                get_node_index(x, y, sprite_width)
+            ] = SDL_MapRGBA(
+                pixel_format,
+                0 /*= red*/,
+                255 /*= green*/,
+                0 /*= blue*/,
+                255 /*= alpha */
+            );
+        }
+    }
+
+    SDL2pp::Surface sprite_obstacle(
+        pix_obstacle,
+        sprite_width,
+        sprite_height,
+        pixel_format->BitsPerPixel,
+        pixel_format->BytesPerPixel * sprite_width,
+        0,
+        0,
+        0,
+        0
+    );
+    SDL2pp::Texture texture_obstacle(renderer, sprite_obstacle);
+
+    SDL2pp::Surface sprite_open(
+        pix_open,
+        sprite_width,
+        sprite_height,
+        pixel_format->BitsPerPixel,
+        pixel_format->BytesPerPixel * sprite_width,
+        0,
+        0,
+        0,
+        0
+    );
+    SDL2pp::Texture texture_open(renderer, sprite_open);
+
+    SDL2pp::Surface sprite_path(
+        pix_path,
+        sprite_width,
+        sprite_height,
+        pixel_format->BitsPerPixel,
+        pixel_format->BytesPerPixel * sprite_width,
+        0,
+        0,
+        0,
+        0
+    );
+    SDL2pp::Texture texture_path(renderer, sprite_path);
+
+    uint32_t x_click {0};
+    uint32_t y_click {0};
+    uint8_t clicks {0};
+
+    uint32_t x_mouse {0};
+    uint32_t y_mouse {0};
+
+    uint8_t mouse_state {SDL_RELEASED};
+
+    // uint64_t sdl_ticks = SDL_GetTicks64();
+    uint64_t frames {0};
+
+    bool done = false;
+    while (!done) {
+        renderer.Clear();
+
+        // Poll and handle events (inputs, window resize, etc.)
+        //
+        // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard
+        // flags to tell if dear imgui wants to use your inputs.
+        //
+        // - When io.WantCaptureMouse is true, do not dispatch mouse input
+        // data to your main application.
+        //
+        // - When io.WantCaptureKeyboard is true, do not dispatch keyboard
+        // input data to your main application.
+        //
+        // Generally you may always pass all inputs to dear imgui, and hide
+        // them from your application based on those two flags.
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            switch (event.type) {
+            case SDL_MOUSEMOTION:
+                x_mouse = event.motion.x;
+                y_mouse = event.motion.y;
+
+                std::cout
+                    << "Mouse [" << x_mouse << ", " << y_mouse << "]"
+                    << std::endl;
+
+                break;
+
+            case SDL_MOUSEBUTTONDOWN:
+                x_click = event.button.x;
+                y_click = event.button.y;
+                mouse_state = event.button.state;
+                clicks = event.button.clicks;
+
+                if (clicks > 2) {
+                    clicks = ((clicks & 0b1) == 1) ? 1 : 2;
+                }
+
+                std::cout
+                    << "Click [" << x_click << ", " << y_click << "]: State ["
+                    << (uint32_t)mouse_state << "]: Clicks ["
+                    << (uint32_t)clicks << "]"
+                    << std::endl;
+
+                break;
+
+            case SDL_MOUSEBUTTONUP:
+                mouse_state = event.button.state;
+
+                std::cout
+                    << "Release ["
+                    << event.button.x << ", " << event.button.y << "]: State ["
+                    << (uint32_t)mouse_state << "]"
+                    << std::endl;
+
+                break;
+
+            case SDL_QUIT:
+                done = true;
+                break;
+
+            case SDL_WINDOWEVENT:
+                if (
+                    event.window.event == SDL_WINDOWEVENT_CLOSE &&
+                    event.window.windowID == SDL_GetWindowID(window.Get())
+                ) {
+                    done = true;
+                }
+
+                break;
+
+            default:
+                break;
+            }
+        }
+
+        for (const auto &node : map.get_nodes()) {
+            const uint32_t x_node {node.x_coord};
+            const uint32_t y_node {node.y_coord};
+
+            const uint32_t x_frame {x_node * sprite_width};
+            const uint32_t y_frame {y_node * sprite_height};
+
+            if (node.blocking) {
+                renderer.Copy(
+                    texture_obstacle,
+                    SDL2pp::NullOpt,
+                    SDL2pp::Rect(
+                        x_frame,
+                        y_frame,
+                        sprite_width,
+                        sprite_height
+                    )
+                );
+            }
+            else {
+                renderer.Copy(
+                    texture_open,
+                    SDL2pp::NullOpt,
+                    SDL2pp::Rect(
+                        x_frame,
+                        y_frame,
+                        sprite_width,
+                        sprite_height
+                    )
+                );
+            }
+        }
+
+        // Get the position on the map that the click corresponds to, dropping
+        // any sub-sprite positional information.
+        //
+        // NOTE: This could also be performed with a shift if the sprite
+        // width/height is a power of 2.
+        const uint32_t x_click_map = x_click / sprite_width;
+        const uint32_t y_click_map = y_click / sprite_height;
+
+        const uint32_t x_click_normal = x_click_map * sprite_width;
+        const uint32_t y_click_normal = y_click_map * sprite_height;
+
+        if (
+            mouse_state == SDL_PRESSED &&
+            !map.is_blocking(x_click_map, y_click_map)
+        ) {
+            renderer.Copy(
+                texture_path,
+                SDL2pp::NullOpt,
+                SDL2pp::Rect(
+                    x_click_normal,
+                    y_click_normal,
+                    sprite_width,
+                    sprite_height
+                )
+            );
+
+            const uint32_t x_mouse_map = x_mouse / sprite_width;
+            const uint32_t y_mouse_map = y_mouse / sprite_height;
+
+            const uint32_t x_mouse_normal = x_mouse_map * sprite_width;
+            const uint32_t y_mouse_normal = y_mouse_map * sprite_height;
+
+            if (!map.is_blocking(x_mouse_map, y_mouse_map)) {
+                renderer.Copy(
+                    texture_path,
+                    SDL2pp::NullOpt,
+                    SDL2pp::Rect(
+                        x_mouse_normal,
+                        y_mouse_normal,
+                        sprite_width,
+                        sprite_height
+                    )
+                );
+            }
+        }
+
+        renderer.Present();
+
+        ++frames;
+
+        SDL_Delay(10);
+    }
+
+    SDL_Delay(1000);
+
+    return;
+}
 
 void demo_gfx(
     SDL2pp::SDL &sdl,
@@ -226,8 +533,7 @@ void demo_gfx(
     uint8_t mouse_state {SDL_RELEASED};
 
     bool done = false;
-    while (!done)
-    {
+    while (!done) {
         // Poll and handle events (inputs, window resize, etc.)
         //
         // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard
@@ -380,22 +686,6 @@ int main(int argc, char** argv) {
 
     std::cout << "Hello, world!" << std::endl;
 
-    Pathfind<Map, MapNode> pathfind {};
-
-    Map map {Map::gen_rand_map()};
-
-    for (uint32_t i = 0; i < 100; ++i) {
-        const auto [x, y] = map.get_rand_open_xy();
-
-        const auto entity = registry.create();
-        registry.emplace<Pos>(entity, (float)x + 0.5f, (float)y + 0.5f);
-        registry.emplace<Pather>(entity);
-    }
-
-    Frame frame(map, registry);
-
-    frame.draw_frame();
-
     try {
         // Init SDL; will be automatically deinitialized when the object is
         // destroyed
@@ -442,7 +732,19 @@ int main(int argc, char** argv) {
         ImFont* imgui_font = io.Fonts->AddFontFromFileTTF("assets/Vera.ttf", 16.0f);
         IM_ASSERT(imgui_font != NULL);
 
-        demo_gfx(
+        // demo_gfx(
+        //     sdl,
+        //     window,
+        //     sdl_ttf,
+        //     renderer,
+        //     mixer,
+        //     io,
+        //     sdl_font,
+        //     imgui_font
+        // );
+
+        pathfind_gfx(
+            registry,
             sdl,
             window,
             sdl_ttf,

@@ -17,11 +17,12 @@ struct Pather {};
 class Map;
 
 class MapNode {
-private:
+public:
     const uint32_t x_coord;
     const uint32_t y_coord;
+    const bool blocking;
 
-    bool blocking;
+private:
 
 public:
     MapNode(
@@ -61,10 +62,12 @@ public:
         height(o.height)
     {}
 
-    static Map gen_rand_map() {
+    static Map gen_rand_map(
+        const uint32_t width = 64, const uint32_t height = 32
+    ) {
         std::uniform_int_distribution<> rng(0, 5);
 
-        Map map {};
+        Map map(width, height);
 
         map.nodes.reserve(map.width * map.height);
 
@@ -91,7 +94,7 @@ public:
         }
     }
 
-    std::pair<uint32_t, uint32_t> get_rand_open_xy() {
+    std::pair<uint32_t, uint32_t> get_rand_open_xy() const {
         std::uniform_int_distribution<> rng_w(0, width - 1);
         std::uniform_int_distribution<> rng_h(0, height - 1);
 
@@ -107,6 +110,14 @@ public:
         } while (!nodes[i].blocking);
 
         return {x, y};
+    }
+
+    bool is_blocking(const uint32_t x, const uint32_t y) const {
+        return nodes[get_node_index(x, y, width)].blocking;
+    }
+
+    const std::vector<MapNode> &get_nodes() const {
+        return nodes;
     }
 };
 
