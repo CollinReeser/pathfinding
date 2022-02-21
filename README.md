@@ -44,12 +44,14 @@ make init
 
 ### Windows Build
 
+**Important**: `make` is aliased to `/mingw64/bin/mingw32-make.exe`.
+
 ```
 git clone <repo>
 make init-win
 ```
 
-### Then, for all
+### Note
 
 `make init` pulls in all submodule dependencies, builds them as relevant, then
 builds the core project.

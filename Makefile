@@ -63,16 +63,16 @@ init-win:
 	git submodule init
 	git submodule update
 	cd submodules/entt/build
-	cmake .. -DENTT_BUILD_TESTING=ON
+	cmake .. -DENTT_BUILD_TESTING=ON -G "MinGW Makefiles"
 	$(MAKE)
 	$(MAKE) test
 	cd ../../googletest
 	mkdir -p build
 	cd build
-	cmake ..
+	cmake .. -G "MinGW Makefiles"
 	$(MAKE)
 	cd ../../libSDL2pp
-	cmake . -DSDL2PP_WITH_WERROR=ON -DSDL2PP_CXXSTD=c++17 -DSDL2PP_STATIC=ON
+	cmake . -DSDL2PP_WITH_WERROR=ON -DSDL2PP_CXXSTD=c++17 -DSDL2PP_STATIC=ON -G "MinGW Makefiles"
 	$(MAKE)
 	cd ../..
 	mkdir -p src_imgui
