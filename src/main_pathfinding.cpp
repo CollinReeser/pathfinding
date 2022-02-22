@@ -389,8 +389,6 @@ void pathfind_gfx(
         start_frame = std::chrono::steady_clock::now();
     }
 
-    SDL_Delay(1000);
-
     return;
 }
 
@@ -825,9 +823,6 @@ int main(int argc, char** argv) {
 
         SDL_RenderClear(renderer.Get());
         SDL_RenderPresent(renderer.Get());
-
-        SDL_Delay(1000);
-
     // All SDL objects are released at this point or if an error occurs
     } catch (SDL2pp::Exception& e) {
         // Exception stores SDL_GetError() result and name of function which
