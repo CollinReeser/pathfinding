@@ -5,6 +5,7 @@
 #include <functional>
 #include <iostream>
 #include <list>
+#include <optional>
 #include <random>
 #include <unordered_set>
 #include <vector>
@@ -136,14 +137,18 @@ private:
         uint32_t dist_from_start;
         uint32_t heur_dist_to_end;
 
+        std::optional<std::reference_wrapper<const ExploredNode>> prev_node;
+
         ExploredNode(
             const uint32_t idx,
             const uint32_t dist_from_start,
-            const uint32_t heur_dist_to_end
+            const uint32_t heur_dist_to_end,
+            std::optional<std::reference_wrapper<const ExploredNode>> prev_node
         ):
             idx(idx),
             dist_from_start(dist_from_start),
-            heur_dist_to_end(heur_dist_to_end)
+            heur_dist_to_end(heur_dist_to_end),
+            prev_node(prev_node)
         {}
     };
 
@@ -157,12 +162,13 @@ private:
     std::unordered_set<uint32_t> explored_nodes;
     std::list<ExploredNode> all_explored_nodes;
 
-    std::vector<std::reference_wrapper<ExploredNode>> explore_next_heap;
+    std::vector<std::reference_wrapper<const ExploredNode>> explore_next_heap;
 
     void push_node(
         const uint32_t idx,
         const uint32_t dist_from_start,
-        const uint32_t heur_dist_to_end
+        const uint32_t heur_dist_to_end,
+        const std::optional<std::reference_wrapper<const ExploredNode>> parent
     ) {
         const auto [iter, inserted] = explored_nodes.insert(idx);
 
@@ -178,7 +184,7 @@ private:
 
             explore_next_heap.emplace_back(
                 all_explored_nodes.emplace_back(
-                    idx, dist_from_start, heur_dist_to_end
+                    idx, dist_from_start, heur_dist_to_end, parent
                 )
             );
 
@@ -284,7 +290,8 @@ private:
                     push_node(
                         idx_neighbor_candidate,
                         cur_node.dist_from_start + 1,
-                        heuristic_to_end(x_neighbor, y_neighbor)
+                        heuristic_to_end(x_neighbor, y_neighbor),
+                        cur_node
                     );
                 }
             }
@@ -333,7 +340,7 @@ public:
         }
 
         push_node(
-            idx_node_start, 0, heuristic_to_end(x_start, x_end)
+            idx_node_start, 0, heuristic_to_end(x_start, x_end), std::nullopt
         );
 
         std::cout
