@@ -821,8 +821,6 @@ int main(int argc, char** argv) {
             imgui_font
         );
 
-        SDL_RenderClear(renderer.Get());
-        SDL_RenderPresent(renderer.Get());
     // All SDL objects are released at this point or if an error occurs
     } catch (SDL2pp::Exception& e) {
         // Exception stores SDL_GetError() result and name of function which
