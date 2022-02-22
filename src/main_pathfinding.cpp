@@ -38,8 +38,6 @@ void pathfind_gfx(
     const uint32_t map_width {SCREEN_WIDTH / sprite_width};
     const uint32_t map_height {SCREEN_HEIGHT / sprite_height};
 
-    Pathfind<Map, MapNode> pathfind {};
-
     Map map {Map::gen_rand_map(map_width, map_height)};
 
     for (uint32_t i = 0; i < 100; ++i) {
@@ -301,6 +299,33 @@ void pathfind_gfx(
                         sprite_height
                     )
                 );
+
+                Pathfind<Map, MapNode> pathfinder(
+                    map,
+                    x_click_map, y_click_map,
+                    x_mouse_map, y_mouse_map,
+                    [](const MapNode &node) {
+                        return !node.blocking;
+                    }
+                );
+
+                const auto path {pathfinder.get_path()};
+
+                for (const auto &[x_path_map, y_path_map] : path) {
+                    const uint32_t x_path = x_path_map * sprite_width;
+                    const uint32_t y_path = y_path_map * sprite_height;
+
+                    renderer.Copy(
+                        texture_path,
+                        SDL2pp::NullOpt,
+                        SDL2pp::Rect(
+                            x_path,
+                            y_path,
+                            sprite_width,
+                            sprite_height
+                        )
+                    );
+                }
             }
         }
 
