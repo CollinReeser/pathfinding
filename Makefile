@@ -24,10 +24,10 @@ clean:
 	rm -f build/*
 	rm -f build_test/*
 	rm -f obj/*
-	rm -f obj_imgui/*
 	rm -f obj_test/*
 
 realclean: clean
+	rm -f obj_imgui/*
 	rm -rf submodules/*
 
 # Submodule versions:
@@ -146,8 +146,9 @@ INCLUDES_TEST := -I src -I submodules/googletest/googletest/include
 # Remove from the test object files any main obj files that have `main()`s.
 OBJ_TEST_FILES := $(filter-out $(OBJ_DIR)/main_%.o, $(OBJ_TEST_FILES))
 
-CXXFLAGS      := -std=c++17 -g -O2 -Wall -Werror -MMD
-CXXFLAGS_TEST := -std=c++17 -g     -Wall -Werror -MMD
+CXXFLAGS      := -std=c++20 -g -O2 -Wall -Werror -MMD
+CXXFLAGS_TEST := -std=c++20 -g     -Wall -Werror -MMD
+CXXFLAGS_IMGUI := -std=c++17 -g -O2 -Wall -Werror -MMD
 
 LD_FLAGS := -L submodules/libSDL2pp -lSDL2pp `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer
 
@@ -159,14 +160,14 @@ $(BINARIES): $(OBJ_IMGUI_FILES) $(OBJ_FILES)
 $(TEST_BINARIES): $(OBJ_TEST_FILES)
 	g++ -o $@ $^ $(LD_TEST_FLAGS)
 
-$(OBJ_IMGUI_DIR)/%.o: $(SRC_IMGUI_DIR)/%.cpp
-	g++ $(CXXFLAGS) $(INCLUDES_IMGUI) -c -o $@ $<
-
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	g++ $(CXXFLAGS) $(INCLUDES) -c -o $@ $<
 
 $(OBJ_TEST_DIR)/%.o: $(SRC_TEST_DIR)/%.cpp
 	g++ $(CXXFLAGS_TEST) $(INCLUDES_TEST) -c -o $@ $<
+
+$(OBJ_IMGUI_DIR)/%.o: $(SRC_IMGUI_DIR)/%.cpp
+	g++ $(CXXFLAGS_IMGUI) $(INCLUDES_IMGUI) -c -o $@ $<
 
 -include $(OBJ_IMGUI_FILES:.o=.d)
 -include $(OBJ_FILES:.o=.d)
