@@ -10,6 +10,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <assert.h>
+
 #include "Util.h"
 
 struct Pos {
@@ -76,7 +78,7 @@ public:
         for (uint32_t i = 0; i < map.nodes.capacity(); ++i) {
             const auto [x, y] = get_node_xy(i, map.width);
 
-            map.nodes.emplace_back(x, y, rng(Map::gen) > 4);
+            map.nodes.emplace_back(x, y, rng(Map::gen) > 3);
         }
 
         return map;
@@ -137,18 +139,18 @@ private:
         uint32_t dist_from_start;
         uint32_t heur_dist_to_end;
 
-        std::optional<std::reference_wrapper<const ExploredNode>> prev_node;
+        std::optional<std::reference_wrapper<const ExploredNode>> parent;
 
         ExploredNode(
             const uint32_t idx,
             const uint32_t dist_from_start,
             const uint32_t heur_dist_to_end,
-            std::optional<std::reference_wrapper<const ExploredNode>> prev_node
+            std::optional<std::reference_wrapper<const ExploredNode>> parent
         ):
             idx(idx),
             dist_from_start(dist_from_start),
             heur_dist_to_end(heur_dist_to_end),
-            prev_node(prev_node)
+            parent(parent)
         {}
     };
 
@@ -173,15 +175,6 @@ private:
         const auto [iter, inserted] = explored_nodes.insert(idx);
 
         if (inserted) {
-            {
-                const auto &[x_push, y_push] = get_node_xy(idx, map.width);
-
-                std::cout
-                    << "Push : [" << x_push << ", " << y_push << "]" << std::endl;
-                std::cout << "  dist_from_start : [" << dist_from_start << "]" << std::endl;
-                std::cout << "  heur_dist_to_end: [" << heur_dist_to_end << "]" << std::endl;
-            }
-
             explore_next_heap.emplace_back(
                 all_explored_nodes.emplace_back(
                     idx, dist_from_start, heur_dist_to_end, parent
@@ -246,13 +239,6 @@ private:
         const ExploredNode &cur_node {get_best_node()};
         pop_node();
 
-        {
-            const auto &[x_cur, y_cur] = get_node_xy(cur_node.idx, map.width);
-
-            std::cout
-                << "Cur  : [" << x_cur << ", " << y_cur << "]" << std::endl;
-        }
-
         const auto [x_node, y_node] = get_node_xy(cur_node.idx, map.width);
 
         for (int32_t d_y {-1}; d_y <= 1; ++d_y) {
@@ -277,16 +263,9 @@ private:
                     idx_neighbor_candidate >= 0 &&
                     static_cast<uint32_t>(
                         idx_neighbor_candidate
-                    ) < map.get_nodes().size()
+                    ) < map.get_nodes().size() &&
+                    pred_accessible(map.get_nodes()[idx_neighbor_candidate])
                 ) {
-
-                    {
-                        std::cout
-                            << "Neigh: [" << x_neighbor << ", " << y_neighbor << "] (" << idx_neighbor_candidate << ")" << std::endl;
-
-                        std::cout << "  Cur node dist_from_start: [" << cur_node.dist_from_start << "]" << std::endl;
-                    }
-
                     push_node(
                         idx_neighbor_candidate,
                         cur_node.dist_from_start + 1,
@@ -343,19 +322,41 @@ public:
             idx_node_start, 0, heuristic_to_end(x_start, x_end), std::nullopt
         );
 
-        std::cout
-            << "Start: [" << x_start << ", " << y_start << "]" << std::endl;
+        while (explore_next_heap.size() > 0) {
+            const ExploredNode &best_node {get_best_node()};
 
-        calc_neighbors();
+            const auto &[x_best, y_best] = get_node_xy(
+                best_node.idx, map.width
+            );
 
-        const ExploredNode &best_node {get_best_node()};
+            if (x_best == x_end && y_best == y_end) {
+                break;
+            }
 
-        const auto &[x_best, y_best] = get_node_xy(best_node.idx, map.width);
+            calc_neighbors();
+        }
 
-        std::cout
-            << "Best : [" << x_best << ", " << y_best << "]" << std::endl;
+        if (explore_next_heap.size() == 0) {
+            return {};
+        }
 
-        return {get_node_xy(best_node.idx, map.width)};
+        std::optional<std::reference_wrapper<const ExploredNode>> path_node {
+            get_best_node()
+        };
+
+        std::vector<std::pair<uint32_t, uint32_t>> path;
+
+        path.push_back(get_node_xy(path_node->get().idx, map.width));
+
+        while (path_node->get().parent) {
+            path.push_back(
+                get_node_xy(path_node->get().parent->get().idx, map.width)
+            );
+
+            path_node = path_node->get().parent;
+        }
+
+        return path;
     }
 };
 
