@@ -162,7 +162,7 @@ private:
     const std::function<bool(const node_t&)> pred_accessible;
 
     std::unordered_set<uint32_t> explored_nodes;
-    std::list<ExploredNode> all_explored_nodes;
+    std::vector<ExploredNode> all_explored_nodes;
 
     std::vector<std::reference_wrapper<const ExploredNode>> explore_next_heap;
 
@@ -264,7 +264,8 @@ private:
                     static_cast<uint32_t>(
                         idx_neighbor_candidate
                     ) < map.get_nodes().size() &&
-                    pred_accessible(map.get_nodes()[idx_neighbor_candidate])
+                    !map.get_nodes()[idx_neighbor_candidate].blocking
+                    // pred_accessible(map.get_nodes()[idx_neighbor_candidate])
                 ) {
                     push_node(
                         idx_neighbor_candidate,
@@ -294,7 +295,11 @@ public:
         x_end(x_end),
         y_end(y_end),
         pred_accessible(pred_accessible)
-    {}
+    {
+        explore_next_heap.reserve(map.width * map.height);
+        explored_nodes.reserve(map.width * map.height);
+        all_explored_nodes.reserve(map.width * map.height);
+    }
 
     std::vector<std::pair<uint32_t, uint32_t>> get_path() {
         if (x_start == x_end && y_start == y_end) {

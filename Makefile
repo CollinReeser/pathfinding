@@ -146,11 +146,13 @@ INCLUDES_TEST := -I src -I submodules/googletest/googletest/include
 # Remove from the test object files any main obj files that have `main()`s.
 OBJ_TEST_FILES := $(filter-out $(OBJ_DIR)/main_%.o, $(OBJ_TEST_FILES))
 
-CXXFLAGS      := -std=c++20 -g -O2 -Wall -Werror -MMD
+# -pg
+CXXFLAGS      := -std=c++20 -g -pg -flto -O3 -Wall -Werror -MMD
 CXXFLAGS_TEST := -std=c++20 -g     -Wall -Werror -MMD
 CXXFLAGS_IMGUI := -std=c++17 -g -O2 -Wall -Werror -MMD
 
-LD_FLAGS := -L submodules/libSDL2pp -lSDL2pp `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer
+# -pg
+LD_FLAGS := -pg -flto -O3 -L submodules/libSDL2pp -lSDL2pp `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer -L /home/collin/Projects/cpp/gperftools/install/lib -Wl,-rpath=/home/collin/Projects/cpp/gperftools/install/lib -lprofiler -ltcmalloc
 
 LD_TEST_FLAGS := -L submodules/googletest/build/lib -lgtest -lpthread
 

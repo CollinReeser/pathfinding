@@ -1,5 +1,6 @@
 #include <chrono>
 #include <iostream>
+#include <ranges>
 #include <sstream>
 
 #include "Draw.h"
@@ -18,8 +19,10 @@
 #error This backend requires SDL 2.0.17+ because of SDL_RenderGeometry() function
 #endif
 
-const uint32_t SCREEN_WIDTH {640};
-const uint32_t SCREEN_HEIGHT {480};
+// const uint32_t SCREEN_WIDTH {640};
+// const uint32_t SCREEN_HEIGHT {480};
+const uint32_t SCREEN_WIDTH {640 * 2};
+const uint32_t SCREEN_HEIGHT {480 * 2};
 
 void pathfind_gfx(
     entt::registry &registry,
@@ -32,8 +35,8 @@ void pathfind_gfx(
     SDL2pp::Font &sdl_font,
     ImFont* imgui_font
 ) {
-    const uint32_t sprite_width {16};
-    const uint32_t sprite_height {16};
+    const uint32_t sprite_width {4};
+    const uint32_t sprite_height {4};
 
     const uint32_t map_width {SCREEN_WIDTH / sprite_width};
     const uint32_t map_height {SCREEN_HEIGHT / sprite_height};
@@ -144,6 +147,14 @@ void pathfind_gfx(
         0
     );
     SDL2pp::Texture texture_path(renderer, sprite_path);
+
+    std::vector<std::pair<uint32_t, uint32_t>> open_spaces;
+
+    for (const auto &node : map.get_nodes()) {
+        if (!node.blocking) {
+            open_spaces.emplace_back(node.x_coord, node.y_coord);
+        }
+    }
 
     uint32_t x_click {0};
     uint32_t y_click {0};
@@ -300,32 +311,79 @@ void pathfind_gfx(
                     )
                 );
 
-                Pathfind<Map, MapNode> pathfinder(
-                    map,
-                    x_click_map, y_click_map,
-                    x_mouse_map, y_mouse_map,
-                    [](const MapNode &node) {
-                        return !node.blocking;
-                    }
-                );
+                {
 
-                const auto path {pathfinder.get_path()};
-
-                for (const auto &[x_path_map, y_path_map] : path) {
-                    const uint32_t x_path = x_path_map * sprite_width;
-                    const uint32_t y_path = y_path_map * sprite_height;
-
-                    renderer.Copy(
-                        texture_path,
-                        SDL2pp::NullOpt,
-                        SDL2pp::Rect(
-                            x_path,
-                            y_path,
-                            sprite_width,
-                            sprite_height
-                        )
+                    Pathfind<Map, MapNode> pathfinder(
+                        map,
+                        x_click_map, y_click_map,
+                        x_mouse_map, y_mouse_map,
+                        [](const MapNode &node) {
+                            return !node.blocking;
+                        }
                     );
+
+                    const auto path {pathfinder.get_path()};
+
+                    for (const auto &[x_path_map, y_path_map] : path) {
+                        const uint32_t x_path = x_path_map * sprite_width;
+                        const uint32_t y_path = y_path_map * sprite_height;
+
+                        renderer.Copy(
+                            texture_path,
+                            SDL2pp::NullOpt,
+                            SDL2pp::Rect(
+                                x_path,
+                                y_path,
+                                sprite_width,
+                                sprite_height
+                            )
+                        );
+                    }
+
                 }
+
+                // uint32_t loops {0};
+                // for (const auto &[x_start, y_start] : open_spaces) {
+                //     std::ranges::reverse_view rv_open_spaces {open_spaces};
+
+                //     for (const auto &[x_end, y_end] : rv_open_spaces) {
+                //         Pathfind<Map, MapNode> pathfinder(
+                //             map,
+                //             x_start, y_start,
+                //             x_end, y_end,
+                //             [](const MapNode &node) {
+                //                 return !node.blocking;
+                //             }
+                //         );
+
+                //         const auto path {pathfinder.get_path()};
+
+                //         for (const auto &[x_path_map, y_path_map] : path) {
+                //             const uint32_t x_path = x_path_map * sprite_width;
+                //             const uint32_t y_path = y_path_map * sprite_height;
+
+                //             renderer.Copy(
+                //                 texture_path,
+                //                 SDL2pp::NullOpt,
+                //                 SDL2pp::Rect(
+                //                     x_path,
+                //                     y_path,
+                //                     sprite_width,
+                //                     sprite_height
+                //                 )
+                //             );
+                //         }
+
+                //         ++loops;
+
+                //         if (loops > 10000) {
+                //             goto DONE;
+                //         }
+                //     }
+                // }
+
+                // DONE:
+                // ;
             }
         }
 
@@ -376,6 +434,8 @@ void pathfind_gfx(
             )
         );
 
+        renderer.Present();
+
         ++frames;
 
         end_frame = std::chrono::steady_clock::now();
@@ -383,8 +443,6 @@ void pathfind_gfx(
         frame_dur = std::chrono::duration_cast<std::chrono::microseconds>(
             end_frame - start_frame
         );
-
-        renderer.Present();
 
         start_frame = std::chrono::steady_clock::now();
     }
