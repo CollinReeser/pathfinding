@@ -1,3 +1,8 @@
+# Recognized ENV vars:
+#
+# PROFILE : Enable profiling with -pg/gprof.
+# RELEASE : Enable release build.
+
 # Run each set of target commands in a single shell. This will make `cd` work
 # as expected.
 #
@@ -146,13 +151,22 @@ INCLUDES_TEST := -I src -I submodules/googletest/googletest/include
 # Remove from the test object files any main obj files that have `main()`s.
 OBJ_TEST_FILES := $(filter-out $(OBJ_DIR)/main_%.o, $(OBJ_TEST_FILES))
 
-# -pg
-CXXFLAGS      := -std=c++20 -g -pg -flto -O3 -Wall -Werror -MMD
-CXXFLAGS_TEST := -std=c++20 -g     -Wall -Werror -MMD
-CXXFLAGS_IMGUI := -std=c++17 -g -O2 -Wall -Werror -MMD
+# ENV vars to control build.
+ifeq ($(PROFILE), 1)
+	GPROF_ENABLE = -pg
+endif
 
-# -pg
-LD_FLAGS := -pg -flto -O3 -L submodules/libSDL2pp -lSDL2pp `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer -L /home/collin/Projects/cpp/gperftools/install/lib -Wl,-rpath=/home/collin/Projects/cpp/gperftools/install/lib -lprofiler -ltcmalloc
+ifeq ($(RELEASE), 1)
+	OPTIMIZE_ARGS = -flto -O3
+else
+	OPTIMIZE_ARGS = -O2
+endif
+
+CXXFLAGS      := -std=c++20 -g $(GPROF_ENABLE) $(OPTIMIZE_ARGS) -Wall -Werror -MMD
+CXXFLAGS_TEST := -std=c++20 -g $(GPROF_ENABLE) -Wall -Werror -MMD
+CXXFLAGS_IMGUI := -std=c++17 -g $(OPTIMIZE_ARGS) -Wall -Werror -MMD
+
+LD_FLAGS := $(GPROF_ENABLE) $(OPTIMIZE_ARGS) -L submodules/libSDL2pp -lSDL2pp `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer
 
 LD_TEST_FLAGS := -L submodules/googletest/build/lib -lgtest -lpthread
 
