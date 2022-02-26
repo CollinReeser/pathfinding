@@ -102,12 +102,12 @@ init-win-libsdl2pp: _submodule-update
 init-sdl-fontcache: _submodule-update
 	cd submodules/nfont/SDL_FontCache
 	mkdir shared
-	g++ -DFC_USE_SDL_GPU -g -fPIC -rdynamic -shared `sdl2-config --cflags` -I ../../sdl-gpu/install/include/SDL2  SDL_FontCache.c -o shared/SDL_FontCache.so
+	g++ -DFC_USE_SDL_GPU -g -fPIC -rdynamic -shared `sdl2-config --cflags` -I ../../sdl-gpu/install/include/SDL2  SDL_FontCache.c -o shared/libSDL_FontCache.so
 
 init-nfont: _submodule-update init-sdl-fontcache
 	cd submodules/nfont
 	mkdir shared
-	g++ -DFC_USE_SDL_GPU -g -fPIC -rdynamic -shared -I ../SDL_FontCache `sdl2-config --cflags` -I ../../sdl-gpu/install/include   NFont.cpp -o shared/NFont.so
+	g++ -DFC_USE_SDL_GPU -g -fPIC -rdynamic -shared -I ../SDL_FontCache `sdl2-config --cflags` -I ../../sdl-gpu/install/include/SDL2   NFont.cpp -o shared/libNFont.so
 
 init-sdl-gpu: _submodule-update init-nfont
 	cd submodules/sdl-gpu
@@ -171,7 +171,7 @@ SRC_TEST_FILES += $(SRC_FILES)
 OBJ_TEST_FILES += $(OBJ_FILES)
 
 INCLUDES_IMGUI := -I src_imgui `sdl2-config --cflags`
-INCLUDES := $(INCLUDES_IMGUI) `sdl2-config --cflags` -I submodules/entt/src -I submodules/libSDL2pp -I submodules/sdl-gpu/install/include
+INCLUDES := $(INCLUDES_IMGUI) `sdl2-config --cflags` -I submodules/entt/src -I submodules/libSDL2pp -I submodules/sdl-gpu/install/include/SDL2 -DFC_USE_SDL_GPU -I submodules/nfont/NFont
 INCLUDES_TEST := -I src -I submodules/googletest/googletest/include
 
 # Remove from the test object files any main obj files that have `main()`s.
@@ -192,7 +192,7 @@ CXXFLAGS      := -std=c++20 -g $(GPROF_ENABLE) $(OPTIMIZE_ARGS) -Wall -Werror -M
 CXXFLAGS_TEST := -std=c++20 -g $(GPROF_ENABLE) -Wall -Werror -MMD
 CXXFLAGS_IMGUI := -std=c++17 -g $(OPTIMIZE_ARGS) -Wall -Werror -MMD
 
-LD_FLAGS := $(GPROF_ENABLE) $(OPTIMIZE_ARGS) -L submodules/libSDL2pp -lSDL2pp `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer -L submodules/sdl-gpu/install/lib -Wl,-rpath,submodules/sdl-gpu/install/lib -lSDL2_gpu
+LD_FLAGS := $(GPROF_ENABLE) $(OPTIMIZE_ARGS) -L submodules/libSDL2pp -lSDL2pp `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer -L submodules/nfont/SDL_FontCache/shared -Wl,-rpath,submodules/nfont/SDL_FontCache/shared -lSDL_FontCache -L submodules/nfont/NFont/shared -Wl,-rpath,submodules/nfont/NFont/shared -lNFont -L submodules/sdl-gpu/install/lib -Wl,-rpath,submodules/sdl-gpu/install/lib -lSDL2_gpu
 
 LD_TEST_FLAGS := -L submodules/googletest/build/lib -lgtest -lpthread
 

@@ -13,7 +13,9 @@
 
 #include <SDL2pp/SDL2pp.hh>
 
-#include <SDL2/SDL_gpu.h>
+#include <SDL_gpu.h>
+
+#include <NFont.h>
 
 #include <entt/entt.hpp>
 
@@ -32,7 +34,7 @@ void pathfind_gfx(
     SDL2pp::Window &window,
     SDL2pp::Mixer &mixer,
     ImGuiIO &io,
-    SDL2pp::Font &sdl_font,
+    NFont &font,
     ImFont* imgui_font
 ) {
     const uint32_t sprite_width {4};
@@ -474,6 +476,23 @@ void pathfind_gfx(
                     );
             }
         }
+
+        font.draw(
+            screen, 0, 0, SDL_Color{0, 0, 0, 255},
+            "Per-frame time (ms): %ld", frame_dur.count() / 1000
+        );
+
+        font.draw(
+            screen, 0, font.getHeight(), SDL_Color{0, 0, 0, 255},
+            "FPS: %d", static_cast<uint32_t>(
+                (1000.0 / (frame_dur.count() / 1000.0))
+            )
+        );
+
+        font.draw(
+            screen, 0, font.getHeight() * 2, SDL_Color{0, 0, 0, 255},
+            "Pathfinding (us): %ld", dur_pathfinding.count() / num_pathfinds
+        );
 
         // std::ostringstream oss_pft;
         // oss_pft << "Per-frame time (ms): " << frame_dur.count() / 1000;
@@ -992,7 +1011,8 @@ int main(int argc, char** argv) {
 
 
         // SDL_ttf font
-        SDL2pp::Font sdl_font("assets/Vera.ttf", 20);
+        // SDL2pp::Font sdl_font("assets/Vera.ttf", 20);
+        NFont font("assets/Vera.ttf", 20);
 
         ImFont* imgui_font = io.Fonts->AddFontFromFileTTF("assets/Vera.ttf", 16.0f);
         IM_ASSERT(imgui_font != NULL);
@@ -1014,7 +1034,7 @@ int main(int argc, char** argv) {
             window,
             mixer,
             io,
-            sdl_font,
+            font,
             imgui_font
         );
 
