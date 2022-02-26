@@ -53,9 +53,11 @@ init:
 	$(MAKE)
 	$(MAKE) runtests
 
-.PHONY: _init-submodule-build _submodule-update init-entt init-googletest init-libsdl2pp init-imgui
+LINUX_SUBMODULE_TARGETS := init-entt init-googletest init-libsdl2pp init-sdl-gpu init-imgui
 
-_init-submodule-build: init-entt init-googletest init-libsdl2pp init-imgui
+.PHONY: _init-submodule-build _submodule-update $(LINUX_SUBMODULE_TARGETS)
+
+_init-submodule-build: $(LINUX_SUBMODULE_TARGETS)
 
 _submodule-update:
 	git submodule init
@@ -97,6 +99,18 @@ init-win-libsdl2pp: _submodule-update
 	cmake . -DSDL2PP_WITH_WERROR=ON -DSDL2PP_CXXSTD=c++17 -DSDL2PP_STATIC=ON -G "MinGW Makefiles"
 	$(MAKE)
 
+init-sdl-gpu: _submodule-update
+	cd submodules/sdl-gpu
+	mkdir install
+	cmake . -DCMAKE_INSTALL_PREFIX=install -G "Unix Makefiles"
+	$(MAKE)
+	$(MAKE) install
+
+init-win-sdl-gpu: _submodule-update
+	cd submodules/sdl-gpu
+	cmake . -G "MinGW Makefiles"
+	$(MAKE)
+
 init-imgui: _submodule-update
 	cd submodules/imgui
 	mkdir -p ../../src_imgui
@@ -115,9 +129,11 @@ init-win:
 	$(MAKE)
 	$(MAKE) runtests
 
-.PHONY: _init-win-submodule-build init-win-entt init-win-googletest init-win-libsdl2pp
+WINDOWS_SUBMODULE_TARGETS := init-win-entt init-win-googletest init-win-libsdl2pp init-win-sdl-gpu init-imgui
 
-_init-win-submodule-build: init-win-entt init-win-googletest init-win-libsdl2pp init-imgui
+.PHONY: _init-win-submodule-build $(WINDOWS_SUBMODULE_TARGETS)
+
+_init-win-submodule-build: $(WINDOWS_SUBMODULE_TARGETS)
 
 runtests: tests
 	for test in $(TEST_BINARIES);\
@@ -145,7 +161,7 @@ SRC_TEST_FILES += $(SRC_FILES)
 OBJ_TEST_FILES += $(OBJ_FILES)
 
 INCLUDES_IMGUI := -I src_imgui `sdl2-config --cflags`
-INCLUDES := $(INCLUDES_IMGUI) `sdl2-config --cflags` -I submodules/entt/src -I submodules/libSDL2pp
+INCLUDES := $(INCLUDES_IMGUI) `sdl2-config --cflags` -I submodules/entt/src -I submodules/libSDL2pp -I submodules/sdl-gui/install/include
 INCLUDES_TEST := -I src -I submodules/googletest/googletest/include
 
 # Remove from the test object files any main obj files that have `main()`s.
@@ -166,7 +182,7 @@ CXXFLAGS      := -std=c++20 -g $(GPROF_ENABLE) $(OPTIMIZE_ARGS) -Wall -Werror -M
 CXXFLAGS_TEST := -std=c++20 -g $(GPROF_ENABLE) -Wall -Werror -MMD
 CXXFLAGS_IMGUI := -std=c++17 -g $(OPTIMIZE_ARGS) -Wall -Werror -MMD
 
-LD_FLAGS := $(GPROF_ENABLE) $(OPTIMIZE_ARGS) -L submodules/libSDL2pp -lSDL2pp `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer
+LD_FLAGS := $(GPROF_ENABLE) $(OPTIMIZE_ARGS) -L submodules/libSDL2pp -lSDL2pp `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer -L submodules/sdl-gpu/install/lib -lSDL2_gpu
 
 LD_TEST_FLAGS := -L submodules/googletest/build/lib -lgtest -lpthread
 
