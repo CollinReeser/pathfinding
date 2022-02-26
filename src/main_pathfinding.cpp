@@ -172,6 +172,13 @@ void pathfind_gfx(
 
     std::chrono::microseconds frame_dur {1};
 
+    auto start_pathfinding = std::chrono::steady_clock::now();
+    auto end_pathfinding = std::chrono::steady_clock::now();
+
+    std::chrono::microseconds dur_pathfinding {1};
+
+    const uint32_t num_pathfinds {100};
+
     bool done = false;
     while (!done) {
         renderer.Clear();
@@ -234,6 +241,9 @@ void pathfind_gfx(
             }
         }
 
+        // Only rendering one texture at a time substantially improves
+        // performance. Switching between two textures back and forth is 3x+
+        // slower, worse on Windows than in VM.
         for (const auto &node : map.get_nodes()) {
             const uint32_t x_node {node.x_coord};
             const uint32_t y_node {node.y_coord};
@@ -253,7 +263,16 @@ void pathfind_gfx(
                     )
                 );
             }
-            else {
+        }
+
+        for (const auto &node : map.get_nodes()) {
+            const uint32_t x_node {node.x_coord};
+            const uint32_t y_node {node.y_coord};
+
+            const uint32_t x_frame {x_node * sprite_width};
+            const uint32_t y_frame {y_node * sprite_height};
+
+            if (!node.blocking) {
                 renderer.Copy(
                     texture_open,
                     SDL2pp::NullOpt,
@@ -339,51 +358,59 @@ void pathfind_gfx(
                             )
                         );
                     }
-
                 }
 
-                // uint32_t loops {0};
-                // for (const auto &[x_start, y_start] : open_spaces) {
-                //     std::ranges::reverse_view rv_open_spaces {open_spaces};
+                start_pathfinding = std::chrono::steady_clock::now();
 
-                //     for (const auto &[x_end, y_end] : rv_open_spaces) {
-                //         Pathfind<Map, MapNode> pathfinder(
-                //             map,
-                //             x_start, y_start,
-                //             x_end, y_end,
-                //             [](const MapNode &node) {
-                //                 return !node.blocking;
-                //             }
-                //         );
+                uint32_t loops {0};
+                for (const auto &[x_start, y_start] : open_spaces) {
+                    std::ranges::reverse_view rv_open_spaces {open_spaces};
 
-                //         const auto path {pathfinder.get_path()};
+                    for (const auto &[x_end, y_end] : rv_open_spaces) {
+                        Pathfind<Map, MapNode> pathfinder(
+                            map,
+                            x_start, y_start,
+                            x_end, y_end,
+                            [](const MapNode &node) {
+                                return !node.blocking;
+                            }
+                        );
 
-                //         for (const auto &[x_path_map, y_path_map] : path) {
-                //             const uint32_t x_path = x_path_map * sprite_width;
-                //             const uint32_t y_path = y_path_map * sprite_height;
+                        const auto path {pathfinder.get_path()};
 
-                //             renderer.Copy(
-                //                 texture_path,
-                //                 SDL2pp::NullOpt,
-                //                 SDL2pp::Rect(
-                //                     x_path,
-                //                     y_path,
-                //                     sprite_width,
-                //                     sprite_height
-                //                 )
-                //             );
-                //         }
+                        for (const auto &[x_path_map, y_path_map] : path) {
+                            const uint32_t x_path = x_path_map * sprite_width;
+                            const uint32_t y_path = y_path_map * sprite_height;
 
-                //         ++loops;
+                            renderer.Copy(
+                                texture_path,
+                                SDL2pp::NullOpt,
+                                SDL2pp::Rect(
+                                    x_path,
+                                    y_path,
+                                    sprite_width,
+                                    sprite_height
+                                )
+                            );
+                        }
 
-                //         if (loops > 10000) {
-                //             goto DONE;
-                //         }
-                //     }
-                // }
+                        ++loops;
 
-                // DONE:
-                // ;
+                        if (loops > num_pathfinds) {
+                            goto DONE;
+                        }
+                    }
+                }
+
+                DONE:
+                ;
+
+                end_pathfinding = std::chrono::steady_clock::now();
+
+                dur_pathfinding =
+                    std::chrono::duration_cast<std::chrono::microseconds>(
+                        end_pathfinding - start_pathfinding
+                    );
             }
         }
 
@@ -431,6 +458,31 @@ void pathfind_gfx(
             SDL2pp::Rect(
                 SDL2pp::Point(0, frame_time_size_point.GetY()),
                 text_fps.GetSize()
+            )
+        );
+
+        std::ostringstream oss_pathfinding;
+        oss_pathfinding
+            << "Pathfinding (us): " << dur_pathfinding.count() / num_pathfinds;
+
+        SDL2pp::Texture text_pathfinding_time(
+            renderer,
+            sdl_font.RenderText_Solid(
+                oss_pathfinding.str().c_str(),
+                SDL_Color{0, 0, 255, 255}
+            )
+        );
+
+        const auto pathfinding_time_size_point {
+            text_pathfinding_time.GetSize()
+        };
+
+        renderer.Copy(
+            text_pathfinding_time,
+            SDL2pp::NullOpt,
+            SDL2pp::Rect(
+                SDL2pp::Point(0, pathfinding_time_size_point.GetY() * 2),
+                text_pathfinding_time.GetSize()
             )
         );
 
