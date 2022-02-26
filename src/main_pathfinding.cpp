@@ -13,6 +13,8 @@
 
 #include <SDL2pp/SDL2pp.hh>
 
+#include <SDL2/SDL_gpu.h>
+
 #include <entt/entt.hpp>
 
 #if !SDL_VERSION_ATLEAST(2,0,17)
@@ -26,10 +28,8 @@ const uint32_t SCREEN_HEIGHT {480 * 2};
 
 void pathfind_gfx(
     entt::registry &registry,
-    SDL2pp::SDL &sdl,
+    GPU_Target* screen,
     SDL2pp::Window &window,
-    SDL2pp::SDLTTF &sdl_ttf,
-    SDL2pp::Renderer &renderer,
     SDL2pp::Mixer &mixer,
     ImGuiIO &io,
     SDL2pp::Font &sdl_font,
@@ -120,7 +120,7 @@ void pathfind_gfx(
         0,
         0
     );
-    SDL2pp::Texture texture_obstacle(renderer, sprite_obstacle);
+    // SDL2pp::Texture texture_obstacle(renderer, sprite_obstacle);
 
     SDL2pp::Surface sprite_open(
         pix_open,
@@ -133,7 +133,7 @@ void pathfind_gfx(
         0,
         0
     );
-    SDL2pp::Texture texture_open(renderer, sprite_open);
+    // SDL2pp::Texture texture_open(renderer, sprite_open);
 
     SDL2pp::Surface sprite_path(
         pix_path,
@@ -146,7 +146,19 @@ void pathfind_gfx(
         0,
         0
     );
-    SDL2pp::Texture texture_path(renderer, sprite_path);
+    // SDL2pp::Texture texture_path(renderer, sprite_path);
+
+    GPU_Image* texture_obstacle = GPU_CopyImageFromSurface(sprite_obstacle.Get());
+    GPU_Image* texture_open = GPU_CopyImageFromSurface(sprite_open.Get());
+    GPU_Image* texture_path = GPU_CopyImageFromSurface(sprite_path.Get());
+
+    auto free_guard = Guard(
+        [=]() {
+            GPU_FreeImage(texture_obstacle);
+            GPU_FreeImage(texture_open);
+            GPU_FreeImage(texture_path);
+        }
+    );
 
     std::vector<std::pair<uint32_t, uint32_t>> open_spaces;
 
@@ -181,7 +193,8 @@ void pathfind_gfx(
 
     bool done = false;
     while (!done) {
-        renderer.Clear();
+        // renderer.Clear();
+        GPU_Clear(screen);
 
         // Poll and handle events (inputs, window resize, etc.)
         //
@@ -252,16 +265,24 @@ void pathfind_gfx(
             const uint32_t y_frame {y_node * sprite_height};
 
             if (node.blocking) {
-                renderer.Copy(
+                GPU_Blit(
                     texture_obstacle,
-                    SDL2pp::NullOpt,
-                    SDL2pp::Rect(
-                        x_frame,
-                        y_frame,
-                        sprite_width,
-                        sprite_height
-                    )
+                    nullptr,
+                    screen,
+                    x_frame,
+                    y_frame
                 );
+
+                // renderer.Copy(
+                //     texture_obstacle,
+                //     SDL2pp::NullOpt,
+                //     SDL2pp::Rect(
+                //         x_frame,
+                //         y_frame,
+                //         sprite_width,
+                //         sprite_height
+                //     )
+                // );
             }
         }
 
@@ -273,16 +294,24 @@ void pathfind_gfx(
             const uint32_t y_frame {y_node * sprite_height};
 
             if (!node.blocking) {
-                renderer.Copy(
+                GPU_Blit(
                     texture_open,
-                    SDL2pp::NullOpt,
-                    SDL2pp::Rect(
-                        x_frame,
-                        y_frame,
-                        sprite_width,
-                        sprite_height
-                    )
+                    nullptr,
+                    screen,
+                    x_frame,
+                    y_frame
                 );
+
+                // renderer.Copy(
+                //     texture_open,
+                //     SDL2pp::NullOpt,
+                //     SDL2pp::Rect(
+                //         x_frame,
+                //         y_frame,
+                //         sprite_width,
+                //         sprite_height
+                //     )
+                // );
             }
         }
 
@@ -301,16 +330,24 @@ void pathfind_gfx(
             mouse_state == SDL_PRESSED &&
             !map.is_blocking(x_click_map, y_click_map)
         ) {
-            renderer.Copy(
+            GPU_Blit(
                 texture_path,
-                SDL2pp::NullOpt,
-                SDL2pp::Rect(
-                    x_click_normal,
-                    y_click_normal,
-                    sprite_width,
-                    sprite_height
-                )
+                nullptr,
+                screen,
+                x_click_normal,
+                y_click_normal
             );
+
+            // renderer.Copy(
+            //     texture_path,
+            //     SDL2pp::NullOpt,
+            //     SDL2pp::Rect(
+            //         x_click_normal,
+            //         y_click_normal,
+            //         sprite_width,
+            //         sprite_height
+            //     )
+            // );
 
             const uint32_t x_mouse_map = x_mouse / sprite_width;
             const uint32_t y_mouse_map = y_mouse / sprite_height;
@@ -319,16 +356,24 @@ void pathfind_gfx(
             const uint32_t y_mouse_normal = y_mouse_map * sprite_height;
 
             if (!map.is_blocking(x_mouse_map, y_mouse_map)) {
-                renderer.Copy(
+                GPU_Blit(
                     texture_path,
-                    SDL2pp::NullOpt,
-                    SDL2pp::Rect(
-                        x_mouse_normal,
-                        y_mouse_normal,
-                        sprite_width,
-                        sprite_height
-                    )
+                    nullptr,
+                    screen,
+                    x_mouse_normal,
+                    y_mouse_normal
                 );
+
+                // renderer.Copy(
+                //     texture_path,
+                //     SDL2pp::NullOpt,
+                //     SDL2pp::Rect(
+                //         x_mouse_normal,
+                //         y_mouse_normal,
+                //         sprite_width,
+                //         sprite_height
+                //     )
+                // );
 
                 {
 
@@ -347,16 +392,24 @@ void pathfind_gfx(
                         const uint32_t x_path = x_path_map * sprite_width;
                         const uint32_t y_path = y_path_map * sprite_height;
 
-                        renderer.Copy(
+                        GPU_Blit(
                             texture_path,
-                            SDL2pp::NullOpt,
-                            SDL2pp::Rect(
-                                x_path,
-                                y_path,
-                                sprite_width,
-                                sprite_height
-                            )
+                            nullptr,
+                            screen,
+                            x_path,
+                            y_path
                         );
+
+                        // renderer.Copy(
+                        //     texture_path,
+                        //     SDL2pp::NullOpt,
+                        //     SDL2pp::Rect(
+                        //         x_path,
+                        //         y_path,
+                        //         sprite_width,
+                        //         sprite_height
+                        //     )
+                        // );
                     }
                 }
 
@@ -382,16 +435,24 @@ void pathfind_gfx(
                             const uint32_t x_path = x_path_map * sprite_width;
                             const uint32_t y_path = y_path_map * sprite_height;
 
-                            renderer.Copy(
+                            GPU_Blit(
                                 texture_path,
-                                SDL2pp::NullOpt,
-                                SDL2pp::Rect(
-                                    x_path,
-                                    y_path,
-                                    sprite_width,
-                                    sprite_height
-                                )
+                                nullptr,
+                                screen,
+                                x_path,
+                                y_path
                             );
+
+                            // renderer.Copy(
+                            //     texture_path,
+                            //     SDL2pp::NullOpt,
+                            //     SDL2pp::Rect(
+                            //         x_path,
+                            //         y_path,
+                            //         sprite_width,
+                            //         sprite_height
+                            //     )
+                            // );
                         }
 
                         ++loops;
@@ -414,79 +475,80 @@ void pathfind_gfx(
             }
         }
 
-        std::ostringstream oss_pft;
-        oss_pft << "Per-frame time (ms): " << frame_dur.count() / 1000;
+        // std::ostringstream oss_pft;
+        // oss_pft << "Per-frame time (ms): " << frame_dur.count() / 1000;
 
-        SDL2pp::Texture text_frame_time(
-            renderer,
-            sdl_font.RenderText_Solid(
-                oss_pft.str().c_str(),
-                SDL_Color{0, 0, 255, 255}
-            )
-        );
+        // SDL2pp::Texture text_frame_time(
+        //     renderer,
+        //     sdl_font.RenderText_Solid(
+        //         oss_pft.str().c_str(),
+        //         SDL_Color{0, 0, 255, 255}
+        //     )
+        // );
 
-        const auto frame_time_size_point {text_frame_time.GetSize()};
+        // const auto frame_time_size_point {text_frame_time.GetSize()};
 
-        renderer.Copy(
-            text_frame_time,
-            SDL2pp::NullOpt,
-            SDL2pp::Rect(
-                0, 0,
-                frame_time_size_point.GetX(),
-                frame_time_size_point.GetY()
-            )
-        );
+        // renderer.Copy(
+        //     text_frame_time,
+        //     SDL2pp::NullOpt,
+        //     SDL2pp::Rect(
+        //         0, 0,
+        //         frame_time_size_point.GetX(),
+        //         frame_time_size_point.GetY()
+        //     )
+        // );
 
-        std::ostringstream oss_fps;
-        oss_fps
-            << "FPS: "
-            << static_cast<uint32_t>(
-                (1000.0 / (frame_dur.count() / 1000.0))
-            );
+        // std::ostringstream oss_fps;
+        // oss_fps
+        //     << "FPS: "
+        //     << static_cast<uint32_t>(
+        //         (1000.0 / (frame_dur.count() / 1000.0))
+        //     );
 
-        SDL2pp::Texture text_fps(
-            renderer,
-            sdl_font.RenderText_Solid(
-                oss_fps.str().c_str(),
-                SDL_Color{0, 0, 255, 255}
-            )
-        );
+        // SDL2pp::Texture text_fps(
+        //     renderer,
+        //     sdl_font.RenderText_Solid(
+        //         oss_fps.str().c_str(),
+        //         SDL_Color{0, 0, 255, 255}
+        //     )
+        // );
 
-        renderer.Copy(
-            text_fps,
-            SDL2pp::NullOpt,
-            SDL2pp::Rect(
-                SDL2pp::Point(0, frame_time_size_point.GetY()),
-                text_fps.GetSize()
-            )
-        );
+        // renderer.Copy(
+        //     text_fps,
+        //     SDL2pp::NullOpt,
+        //     SDL2pp::Rect(
+        //         SDL2pp::Point(0, frame_time_size_point.GetY()),
+        //         text_fps.GetSize()
+        //     )
+        // );
 
-        std::ostringstream oss_pathfinding;
-        oss_pathfinding
-            << "Pathfinding (us): " << dur_pathfinding.count() / num_pathfinds;
+        // std::ostringstream oss_pathfinding;
+        // oss_pathfinding
+        //     << "Pathfinding (us): " << dur_pathfinding.count() / num_pathfinds;
 
-        SDL2pp::Texture text_pathfinding_time(
-            renderer,
-            sdl_font.RenderText_Solid(
-                oss_pathfinding.str().c_str(),
-                SDL_Color{0, 0, 255, 255}
-            )
-        );
+        // SDL2pp::Texture text_pathfinding_time(
+        //     renderer,
+        //     sdl_font.RenderText_Solid(
+        //         oss_pathfinding.str().c_str(),
+        //         SDL_Color{0, 0, 255, 255}
+        //     )
+        // );
 
-        const auto pathfinding_time_size_point {
-            text_pathfinding_time.GetSize()
-        };
+        // const auto pathfinding_time_size_point {
+        //     text_pathfinding_time.GetSize()
+        // };
 
-        renderer.Copy(
-            text_pathfinding_time,
-            SDL2pp::NullOpt,
-            SDL2pp::Rect(
-                SDL2pp::Point(0, pathfinding_time_size_point.GetY() * 2),
-                text_pathfinding_time.GetSize()
-            )
-        );
+        // renderer.Copy(
+        //     text_pathfinding_time,
+        //     SDL2pp::NullOpt,
+        //     SDL2pp::Rect(
+        //         SDL2pp::Point(0, pathfinding_time_size_point.GetY() * 2),
+        //         text_pathfinding_time.GetSize()
+        //     )
+        // );
 
-        renderer.Present();
+        // renderer.Present();
+        GPU_Flip(screen);
 
         ++frames;
 
@@ -863,25 +925,46 @@ int main(int argc, char** argv) {
     std::cout << "Hello, world!" << std::endl;
 
     try {
+        GPU_SetDebugLevel(GPU_DEBUG_LEVEL_MAX);
+
         // Init SDL; will be automatically deinitialized when the object is
         // destroyed
-        SDL2pp::SDL sdl(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+        // SDL2pp::SDL sdl(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+        GPU_Target* screen = GPU_Init(
+            SCREEN_WIDTH, SCREEN_HEIGHT, GPU_DEFAULT_INIT_FLAGS
+        );
+
+        if (screen == nullptr) {
+            std::cerr << "Failed to initialize sdl-gpu." << std::endl;
+
+            exit(1);
+        }
+
+        auto guard = Guard(
+            []() {
+                GPU_Quit();
+            }
+        );
 
         // Likewise, init SDL_ttf library
         SDL2pp::SDLTTF sdl_ttf;
 
         // Straightforward wrappers around corresponding SDL2 objects
         // These take full care of proper object destruction and error checking
-        SDL2pp::Window window(
-            "libSDL2pp demo",
-            SDL_WINDOWPOS_UNDEFINED,
-            SDL_WINDOWPOS_UNDEFINED,
-            SCREEN_WIDTH,
-            SCREEN_HEIGHT,
-            SDL_WINDOW_RESIZABLE
-        );
+        // SDL2pp::Window window(
+        //     "libSDL2pp demo",
+        //     SDL_WINDOWPOS_UNDEFINED,
+        //     SDL_WINDOWPOS_UNDEFINED,
+        //     SCREEN_WIDTH,
+        //     SCREEN_HEIGHT,
+        //     SDL_WINDOW_RESIZABLE
+        // );
 
-        SDL2pp::Renderer renderer(window, -1, SDL_RENDERER_ACCELERATED);
+        SDL_GLContext& gl_context = screen->context->context;
+        SDL_Window* window_ptr = SDL_GetWindowFromID(screen->context->windowID);
+        SDL2pp::Window window(window_ptr);
+
+        // SDL2pp::Renderer renderer(window, -1, SDL_RENDERER_ACCELERATED);
 
         // Initialize audio mixer
         SDL2pp::Mixer mixer(
@@ -899,8 +982,14 @@ int main(int argc, char** argv) {
         ImGui::StyleColorsDark();
 
         // Setup Platform/Renderer backends
-        ImGui_ImplSDL2_InitForSDLRenderer(window.Get(), renderer.Get());
-        ImGui_ImplSDLRenderer_Init(renderer.Get());
+        // ImGui_ImplSDL2_InitForSDLRenderer(window.Get(), renderer.Get());
+        // ImGui_ImplSDLRenderer_Init(renderer.Get());
+        ImGui_ImplSDL2_InitForOpenGL(window.Get(), gl_context);
+
+        // Do we need this?
+        // const char* glsl_version = "#version 120";
+        // ImGui_ImplOpenGL3_Init(glsl_version);
+
 
         // SDL_ttf font
         SDL2pp::Font sdl_font("assets/Vera.ttf", 20);
@@ -921,10 +1010,8 @@ int main(int argc, char** argv) {
 
         pathfind_gfx(
             registry,
-            sdl,
+            screen,
             window,
-            sdl_ttf,
-            renderer,
             mixer,
             io,
             sdl_font,
