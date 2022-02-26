@@ -61,7 +61,7 @@ _init-submodule-build: $(LINUX_SUBMODULE_TARGETS)
 
 _submodule-update:
 	git submodule init
-	git submodule update
+	git submodule update --init --recursive
 
 init-entt: _submodule-update
 	cd submodules/entt/build
@@ -99,7 +99,17 @@ init-win-libsdl2pp: _submodule-update
 	cmake . -DSDL2PP_WITH_WERROR=ON -DSDL2PP_CXXSTD=c++17 -DSDL2PP_STATIC=ON -G "MinGW Makefiles"
 	$(MAKE)
 
-init-sdl-gpu: _submodule-update
+init-sdl-fontcache: _submodule-update
+	cd submodules/nfont/SDL_FontCache
+	mkdir shared
+	g++ -DFC_USE_SDL_GPU -g -fPIC -rdynamic -shared `sdl2-config --cflags` -I ../../sdl-gpu/install/include/SDL2  SDL_FontCache.c -o shared/SDL_FontCache.so
+
+init-nfont: _submodule-update init-sdl-fontcache
+	cd submodules/nfont
+	mkdir shared
+	g++ -DFC_USE_SDL_GPU -g -fPIC -rdynamic -shared -I ../SDL_FontCache `sdl2-config --cflags` -I ../../sdl-gpu/install/include   NFont.cpp -o shared/NFont.so
+
+init-sdl-gpu: _submodule-update init-nfont
 	cd submodules/sdl-gpu
 	mkdir install
 	cmake . -DCMAKE_INSTALL_PREFIX=install -G "Unix Makefiles"
