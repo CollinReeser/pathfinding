@@ -209,10 +209,11 @@ void pathfind_gfx(
 
     // Does not cull the clipped area from calculations, but does make it
     // black.
-    GPU_SetClip(
-        screen,
-        2, 2, SCREEN_WIDTH - 32, SCREEN_HEIGHT - 32
-    );
+
+    // GPU_SetClip(
+    //     screen,
+    //     2, 2, SCREEN_WIDTH - 32, SCREEN_HEIGHT - 32
+    // );
 
     GPU_EnableCamera(screen, GPU_TRUE);
 
@@ -235,8 +236,8 @@ void pathfind_gfx(
     GPU_Image* map_image = nullptr;
     auto free_map_image = Guard(
         [=]() {
-            if (free_map_image != nullptr) {
-                GPU_FreeImage(free_map_image);
+            if (map_image != nullptr) {
+                GPU_FreeImage(map_image);
             }
         }
     );
@@ -260,7 +261,7 @@ void pathfind_gfx(
         GPU_Camera cam = GPU_GetCamera(screen);
         // cam.x -= 1;
         // cam.y -= 1;
-        // cam.angle += 0.05;
+        // cam.angle += 0.01;
         // cam.zoom_x += 0.01;
         // cam.zoom_y += 0.01;
         // cam.z_near += 0.1;
@@ -270,6 +271,7 @@ void pathfind_gfx(
         // This will fit the GPU_Target into the target rectangle within the
         // window, while the target itself can still be treated as though it is
         // mapped to fill the whole window itself.
+
         // GPU_SetViewport(screen, GPU_Rect(0, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2));
 
         // Poll and handle events (inputs, window resize, etc.)
