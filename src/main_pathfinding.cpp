@@ -34,6 +34,7 @@ void pathfind_gfx(
     SDL2pp::Window &window,
     SDL2pp::Mixer &mixer,
     ImGuiIO &io,
+    SDL2pp::Font &sdl_font,
     NFont &font,
     ImFont* imgui_font
 ) {
@@ -191,6 +192,16 @@ void pathfind_gfx(
 
     std::chrono::microseconds dur_flip {1};
 
+    auto start_clear = std::chrono::steady_clock::now();
+    auto end_clear = std::chrono::steady_clock::now();
+
+    std::chrono::microseconds dur_clear {1};
+
+    auto start_font = std::chrono::steady_clock::now();
+    auto end_font = std::chrono::steady_clock::now();
+
+    std::chrono::microseconds dur_font {1};
+
     auto start_pathfinding = std::chrono::steady_clock::now();
     auto end_pathfinding = std::chrono::steady_clock::now();
 
@@ -201,7 +212,16 @@ void pathfind_gfx(
     bool done = false;
     while (!done) {
         // renderer.Clear();
+
+        start_clear = std::chrono::steady_clock::now();
+
         GPU_Clear(screen);
+
+        end_clear = std::chrono::steady_clock::now();
+
+        dur_clear = std::chrono::duration_cast<std::chrono::microseconds>(
+            end_clear - start_clear
+        );
 
         // Poll and handle events (inputs, window resize, etc.)
         //
@@ -482,35 +502,114 @@ void pathfind_gfx(
             }
         }
 
-        font.draw(
-            screen, 0, 0, SDL_Color{0, 0, 0, 255},
-            "Per-frame time (ms): %lld", frame_dur.count() / 1000
+        if (frames % 60 == 0) {
+            start_font = std::chrono::steady_clock::now();
+        }
+
+        // font.draw(
+        //     screen, 0, 0, SDL_Color{0, 0, 0, 255},
+        //     "Per-frame time (ms): %lld", frame_dur.count() / 1000
+        // );
+
+        // font.draw(
+        //     screen, 0, font.getHeight(), SDL_Color{0, 0, 0, 255},
+        //     "Flip time (us): %lld", dur_flip.count()
+        // );
+
+        // font.draw(
+        //     screen, 0, font.getHeight() * 2, SDL_Color{0, 0, 0, 255},
+        //     "Clear time (us): %lld", dur_clear.count()
+        // );
+
+        // font.draw(
+        //     screen, 0, font.getHeight() * 3, SDL_Color{0, 0, 0, 255},
+        //     "FPS: %d", static_cast<uint32_t>(
+        //         (1000.0 / (frame_dur.count() / 1000.0))
+        //     )
+        // );
+
+        // font.draw(
+        //     screen, 0, font.getHeight() * 4, SDL_Color{0, 0, 0, 255},
+        //     "Pathfinding per (us): %lld", dur_pathfinding.count() / num_pathfinds
+        // );
+
+        // font.draw(
+        //     screen, 0, font.getHeight() * 5, SDL_Color{0, 0, 0, 255},
+        //     "Pathfinding total (ms): %lld", dur_pathfinding.count() / 1000
+        // );
+
+        // font.draw(
+        //     screen, 0, font.getHeight() * 6, SDL_Color{0, 0, 0, 255},
+        //     "Font time (us): %lld", dur_font.count()
+        // );
+
+        // font.drawBox(
+        //     screen, SDL_Rect(0, font.getHeight() * 7, 400, 100),
+        //     "The quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog..."
+        // );
+
+        // font.drawColumn(
+        //     screen, 600, font.getHeight() * 7, 400,
+        //     "The quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog..."
+        // );
+
+        std::ostringstream oss_pft;
+        oss_pft << "Per-frame time (ms): " << frame_dur.count() / 1000;
+
+        auto text_frame_surface = sdl_font.RenderText_Solid(
+            oss_pft.str().c_str(),
+            SDL_Color{0, 0, 255, 255}
         );
 
-        font.draw(
-            screen, 0, font.getHeight(), SDL_Color{0, 0, 0, 255},
-            "Flip time (ms): %lld", dur_flip.count() / 1000
+        const auto frame_time_size_point {text_frame_surface.GetSize()};
+
+        GPU_Image* text_frame = GPU_CopyImageFromSurface(text_frame_surface.Get());
+
+        GPU_Blit(
+            text_frame,
+            nullptr,
+            screen,
+            0, 0
         );
 
-        font.draw(
-            screen, 0, font.getHeight() * 2, SDL_Color{0, 0, 0, 255},
-            "FPS: %d", static_cast<uint32_t>(
+        std::ostringstream oss_fps;
+        oss_fps
+            << "FPS: "
+            << static_cast<uint32_t>(
                 (1000.0 / (frame_dur.count() / 1000.0))
-            )
+            );
+
+        auto text_fps_surface = sdl_font.RenderText_Solid(
+            oss_fps.str().c_str(),
+            SDL_Color{0, 0, 255, 255}
         );
 
-        font.draw(
-            screen, 0, font.getHeight() * 3, SDL_Color{0, 0, 0, 255},
-            "Pathfinding per (us): %lld", dur_pathfinding.count() / num_pathfinds
+        GPU_Image* text_fps = GPU_CopyImageFromSurface(text_fps_surface.Get());
+
+        GPU_Blit(
+            text_fps,
+            nullptr,
+            screen,
+            0, frame_time_size_point.GetY()
         );
 
-        font.draw(
-            screen, 0, font.getHeight() * 4, SDL_Color{0, 0, 0, 255},
-            "Pathfinding total (ms): %lld", dur_pathfinding.count() / 1000
+        std::ostringstream oss_pathfinding;
+        oss_pathfinding
+            << "Pathfinding (us): " << dur_pathfinding.count() / num_pathfinds;
+
+        auto text_path_surface = sdl_font.RenderText_Solid(
+            oss_pathfinding.str().c_str(),
+            SDL_Color{0, 0, 255, 255}
         );
 
-        // std::ostringstream oss_pft;
-        // oss_pft << "Per-frame time (ms): " << frame_dur.count() / 1000;
+        GPU_Image* text_path = GPU_CopyImageFromSurface(text_path_surface.Get());
+
+        GPU_Blit(
+            text_path,
+            nullptr,
+            screen,
+            0, frame_time_size_point.GetY() * 2
+        );
 
         // SDL2pp::Texture text_frame_time(
         //     renderer,
@@ -519,8 +618,6 @@ void pathfind_gfx(
         //         SDL_Color{0, 0, 255, 255}
         //     )
         // );
-
-        // const auto frame_time_size_point {text_frame_time.GetSize()};
 
         // renderer.Copy(
         //     text_frame_time,
@@ -531,13 +628,6 @@ void pathfind_gfx(
         //         frame_time_size_point.GetY()
         //     )
         // );
-
-        // std::ostringstream oss_fps;
-        // oss_fps
-        //     << "FPS: "
-        //     << static_cast<uint32_t>(
-        //         (1000.0 / (frame_dur.count() / 1000.0))
-        //     );
 
         // SDL2pp::Texture text_fps(
         //     renderer,
@@ -555,10 +645,6 @@ void pathfind_gfx(
         //         text_fps.GetSize()
         //     )
         // );
-
-        // std::ostringstream oss_pathfinding;
-        // oss_pathfinding
-        //     << "Pathfinding (us): " << dur_pathfinding.count() / num_pathfinds;
 
         // SDL2pp::Texture text_pathfinding_time(
         //     renderer,
@@ -580,6 +666,14 @@ void pathfind_gfx(
         //         text_pathfinding_time.GetSize()
         //     )
         // );
+
+        if (frames % 60 == 0) {
+            end_font = std::chrono::steady_clock::now();
+
+            dur_font = std::chrono::duration_cast<std::chrono::microseconds>(
+                end_font - start_font
+            );
+        }
 
         // renderer.Present();
 
@@ -990,6 +1084,8 @@ int main(int argc, char** argv) {
             }
         );
 
+        GPU_SetDefaultAnchor(0, 0);
+
         // Likewise, init SDL_ttf library
         SDL2pp::SDLTTF sdl_ttf;
 
@@ -1036,7 +1132,7 @@ int main(int argc, char** argv) {
 
 
         // SDL_ttf font
-        // SDL2pp::Font sdl_font("assets/Vera.ttf", 20);
+        SDL2pp::Font sdl_font("assets/Vera.ttf", 20);
         NFont font("assets/Vera.ttf", 20);
 
         ImFont* imgui_font = io.Fonts->AddFontFromFileTTF("assets/Vera.ttf", 16.0f);
@@ -1059,6 +1155,7 @@ int main(int argc, char** argv) {
             window,
             mixer,
             io,
+            sdl_font,
             font,
             imgui_font
         );
