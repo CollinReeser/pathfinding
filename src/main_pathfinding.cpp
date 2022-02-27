@@ -522,17 +522,19 @@ void pathfind_gfx(
 
         font.draw(
             screen, 0, 0, SDL_Color{0, 0, 0, 255},
-            "Per-frame time (ms): %lld", frame_dur.count() / 1000
+            "Per-frame time (ms): %d", static_cast<uint32_t>(
+                frame_dur.count() / 1000
+            )
         );
 
         font.draw(
             screen, 0, font.getHeight(), SDL_Color{0, 0, 0, 255},
-            "Flip time (us): %lld", dur_flip.count()
+            "Flip time (us): %d", static_cast<uint32_t>(dur_flip.count())
         );
 
         font.draw(
             screen, 0, font.getHeight() * 2, SDL_Color{0, 0, 0, 255},
-            "Clear time (us): %lld", dur_clear.count()
+            "Clear time (us): %d", static_cast<uint32_t>(dur_clear.count())
         );
 
         font.draw(
@@ -544,17 +546,21 @@ void pathfind_gfx(
 
         font.draw(
             screen, 0, font.getHeight() * 4, SDL_Color{0, 0, 0, 255},
-            "Pathfinding per (us): %lld", dur_pathfinding.count() / num_pathfinds
+            "Pathfinding per (us): %d", static_cast<uint32_t>(
+                dur_pathfinding.count() / num_pathfinds
+            )
         );
 
         font.draw(
             screen, 0, font.getHeight() * 5, SDL_Color{0, 0, 0, 255},
-            "Pathfinding total (ms): %lld", dur_pathfinding.count() / 1000
+            "Pathfinding total (ms): %d", static_cast<uint32_t>(
+                dur_pathfinding.count() / 1000
+            )
         );
 
         font.draw(
             screen, 0, font.getHeight() * 6, SDL_Color{0, 0, 0, 255},
-            "Font time (us): %lld", dur_font.count()
+            "Font time (us): %d", static_cast<uint32_t>(dur_font.count())
         );
 
         font.draw(
