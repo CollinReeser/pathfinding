@@ -479,7 +479,7 @@ void pathfind_gfx(
 
         font.draw(
             screen, 0, 0, SDL_Color{0, 0, 0, 255},
-            "Per-frame time (ms): %ld", frame_dur.count() / 1000
+            "Per-frame time (ms): %lld", frame_dur.count() / 1000
         );
 
         font.draw(
@@ -491,7 +491,7 @@ void pathfind_gfx(
 
         font.draw(
             screen, 0, font.getHeight() * 2, SDL_Color{0, 0, 0, 255},
-            "Pathfinding (us): %ld", dur_pathfinding.count() / num_pathfinds
+            "Pathfinding (us): %lld", dur_pathfinding.count() / num_pathfinds
         );
 
         // std::ostringstream oss_pft;
