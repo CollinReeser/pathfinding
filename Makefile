@@ -217,8 +217,16 @@ LD_FLAGS := $(GPROF_ENABLE) $(OPTIMIZE_ARGS) -L submodules/libSDL2pp -lSDL2pp `s
 
 LD_TEST_FLAGS := -L submodules/googletest/build/lib -lgtest -lpthread
 
-$(BINARIES): $(OBJ_IMGUI_FILES) $(OBJ_FILES)
-	g++ -o $@ $^ $(LD_FLAGS)
+ifeq ($(DETECTED_OS),Windows)
+	LOCAL_DLLS := libSDL2_gpu.dll
+	LOCAL_DLLS_PATHS := $(LOCAL_DLLS:%=$(BUILD_DIR)/%)
+endif
+
+$(LOCAL_DLLS_PATHS):
+	cp submodules/sdl-gpu/$(SDL_GPU_INSTALL_SUBDIR)/bin/libSDL2_gpu.dll $(BUILD_DIR)/libSDL2_gpu.dll
+
+$(BINARIES):  $(OBJ_IMGUI_FILES) $(OBJ_NFONT_FILES) $(OBJ_FILES) $(LOCAL_DLLS_PATHS)
+	g++ -o $@ $(OBJ_IMGUI_FILES) $(OBJ_NFONT_FILES) $(OBJ_FILES) $(LD_FLAGS)
 
 $(TEST_BINARIES): $(OBJ_TEST_FILES)
 	g++ -o $@ $^ $(LD_TEST_FLAGS)
