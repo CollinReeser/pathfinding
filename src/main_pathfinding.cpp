@@ -172,6 +172,11 @@ void pathfind_gfx(
 
     std::chrono::microseconds frame_dur {1};
 
+    auto start_flip = std::chrono::steady_clock::now();
+    auto end_flip = std::chrono::steady_clock::now();
+
+    std::chrono::microseconds dur_flip {1};
+
     auto start_pathfinding = std::chrono::steady_clock::now();
     auto end_pathfinding = std::chrono::steady_clock::now();
 
@@ -486,7 +491,36 @@ void pathfind_gfx(
             )
         );
 
+        std::ostringstream oss_flip_time;
+        oss_flip_time
+            << "Flip time (ms): " << (dur_flip.count() / 1000);
+
+        SDL2pp::Texture text_flip_time(
+            renderer,
+            sdl_font.RenderText_Solid(
+                oss_flip_time.str().c_str(),
+                SDL_Color{0, 0, 255, 255}
+            )
+        );
+
+        renderer.Copy(
+            text_flip_time,
+            SDL2pp::NullOpt,
+            SDL2pp::Rect(
+                SDL2pp::Point(0, pathfinding_time_size_point.GetY() * 3),
+                text_flip_time.GetSize()
+            )
+        );
+
+        start_flip = std::chrono::steady_clock::now();
+
         renderer.Present();
+
+        end_flip = std::chrono::steady_clock::now();
+
+        dur_flip = std::chrono::duration_cast<std::chrono::microseconds>(
+            end_flip - start_flip
+        );
 
         ++frames;
 
