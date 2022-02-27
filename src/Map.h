@@ -58,7 +58,9 @@ public:
     Map(const uint32_t width = 64, const uint32_t height = 32):
         width(width),
         height(height)
-    {}
+    {
+        gen.seed(1);
+    }
 
     Map(Map&& o) noexcept:
         nodes(std::move(o.nodes)),

@@ -186,6 +186,11 @@ void pathfind_gfx(
 
     std::chrono::microseconds frame_dur {1};
 
+    auto start_flip = std::chrono::steady_clock::now();
+    auto end_flip = std::chrono::steady_clock::now();
+
+    std::chrono::microseconds dur_flip {1};
+
     auto start_pathfinding = std::chrono::steady_clock::now();
     auto end_pathfinding = std::chrono::steady_clock::now();
 
@@ -484,14 +489,24 @@ void pathfind_gfx(
 
         font.draw(
             screen, 0, font.getHeight(), SDL_Color{0, 0, 0, 255},
+            "Flip time (ms): %lld", dur_flip.count() / 1000
+        );
+
+        font.draw(
+            screen, 0, font.getHeight() * 2, SDL_Color{0, 0, 0, 255},
             "FPS: %d", static_cast<uint32_t>(
                 (1000.0 / (frame_dur.count() / 1000.0))
             )
         );
 
         font.draw(
-            screen, 0, font.getHeight() * 2, SDL_Color{0, 0, 0, 255},
-            "Pathfinding (us): %lld", dur_pathfinding.count() / num_pathfinds
+            screen, 0, font.getHeight() * 3, SDL_Color{0, 0, 0, 255},
+            "Pathfinding per (us): %lld", dur_pathfinding.count() / num_pathfinds
+        );
+
+        font.draw(
+            screen, 0, font.getHeight() * 4, SDL_Color{0, 0, 0, 255},
+            "Pathfinding total (ms): %lld", dur_pathfinding.count() / 1000
         );
 
         // std::ostringstream oss_pft;
@@ -567,7 +582,16 @@ void pathfind_gfx(
         // );
 
         // renderer.Present();
+
+        start_flip = std::chrono::steady_clock::now();
+
         GPU_Flip(screen);
+
+        end_flip = std::chrono::steady_clock::now();
+
+        dur_flip = std::chrono::duration_cast<std::chrono::microseconds>(
+            end_flip - start_flip
+        );
 
         ++frames;
 
@@ -950,7 +974,8 @@ int main(int argc, char** argv) {
         // destroyed
         // SDL2pp::SDL sdl(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
         GPU_Target* screen = GPU_Init(
-            SCREEN_WIDTH, SCREEN_HEIGHT, GPU_DEFAULT_INIT_FLAGS
+            SCREEN_WIDTH, SCREEN_HEIGHT,
+            GPU_INIT_DISABLE_VSYNC
         );
 
         if (screen == nullptr) {
