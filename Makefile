@@ -12,6 +12,23 @@
 
 .PHONY: clean realclean init init-win tests runtests
 
+ifeq ($(OS),Windows_NT)
+    DETECTED_OS := Windows
+else
+    DETECTED_OS := $(shell uname)
+endif
+
+# ENV vars to control build.
+ifeq ($(PROFILE), 1)
+	GPROF_ENABLE := -pg
+endif
+
+ifeq ($(RELEASE), 1)
+	OPTIMIZE_ARGS := -flto -O3
+else
+	OPTIMIZE_ARGS := -O2
+endif
+
 BUILD_DIR := build
 BUILD_TEST_DIR := build_test
 
@@ -26,13 +43,15 @@ all: $(BINARIES) tests
 tests: $(TEST_BINARIES)
 
 clean:
-	rm -f build/*
-	rm -f build_test/*
-	rm -f obj/*
-	rm -f obj_test/*
+	rm -rf $(OBJ_DIR)
+	rm -rf $(OBJ_TEST_DIR)
+	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_TEST_DIR)
 
 realclean: clean
-	rm -f obj_imgui/*
+	rm -rf $(SRC_IMGUI_DIR)
+	rm -rf $(OBJ_IMGUI_DIR)
+	rm -rf $(OBJ_NFONT_DIR)
 	rm -rf submodules/*
 
 # Submodule versions:
@@ -46,20 +65,22 @@ realclean: clean
 # Initialize project for Linux.
 init:
 	$(MAKE) _init-submodule-build
-	mkdir -p obj
-	mkdir -p obj_test
-	mkdir -p build
-	mkdir -p build_test
+	mkdir -p $(OBJ_DIR)
+	mkdir -p $(OBJ_TEST_DIR)
+	mkdir -p $(BUILD_DIR)
+	mkdir -p $(BUILD_TEST_DIR)
 	$(MAKE)
 	$(MAKE) runtests
 
-.PHONY: _init-submodule-build _submodule-update init-entt init-googletest init-libsdl2pp init-imgui
+LINUX_SUBMODULE_TARGETS := init-entt init-googletest init-libsdl2pp init-sdl-gpu init-sdl-fontcache init-nfont init-imgui
 
-_init-submodule-build: init-entt init-googletest init-libsdl2pp init-imgui
+.PHONY: _init-submodule-build _submodule-update $(LINUX_SUBMODULE_TARGETS)
+
+_init-submodule-build: $(LINUX_SUBMODULE_TARGETS)
 
 _submodule-update:
 	git submodule init
-	git submodule update
+	git submodule update --init --recursive
 
 init-entt: _submodule-update
 	cd submodules/entt/build
@@ -97,13 +118,50 @@ init-win-libsdl2pp: _submodule-update
 	cmake . -DSDL2PP_WITH_WERROR=ON -DSDL2PP_CXXSTD=c++17 -DSDL2PP_STATIC=ON -G "MinGW Makefiles"
 	$(MAKE)
 
+SDL_GPU_INSTALL_SUBDIR := $(if $(filter Windows,$(DETECTED_OS)),SDL_gpu-MINGW,SDL_gpu)
+
+init-sdl-gpu: _submodule-update
+	cd submodules/sdl-gpu
+	cmake . -G "Unix Makefiles"
+	$(MAKE)
+	# Make sure the expected install dir has been created.
+	ls $(SDL_GPU_INSTALL_SUBDIR)
+
+init-win-sdl-gpu: _submodule-update
+	cd submodules/sdl-gpu
+	cmake . -G "MinGW Makefiles"
+	$(MAKE)
+	# Make sure the expected install dir has been created.
+	ls $(SDL_GPU_INSTALL_SUBDIR)
+
+INIT_SDL_FONTCACHE_DEP := $(if $(filter Windows,$(DETECTED_OS)),init-win-sdl-gpu,init-sdl-gpu)
+
+OBJ_NFONT_DIR := obj_nfont
+OBJ_NFONT_FILES := $(wildcard $(OBJ_NFONT_DIR)/*.o)
+
+init-sdl-fontcache: _submodule-update $(INIT_SDL_FONTCACHE_DEP)
+	cd submodules/nfont/SDL_FontCache
+	mkdir -p ../../../$(OBJ_NFONT_DIR)
+	g++ -DFC_USE_SDL_GPU -g $(GPROF_ENABLE) $(OPTIMIZE_ARGS) `sdl2-config --cflags` -I ../../sdl-gpu/$(SDL_GPU_INSTALL_SUBDIR)/include -c SDL_FontCache.c -o ../../../$(OBJ_NFONT_DIR)/SDL_FontCache.o
+
+init-nfont: _submodule-update init-sdl-fontcache
+	cd submodules/nfont
+	mkdir -p ../../../$(OBJ_NFONT_DIR)
+	g++ -DFC_USE_SDL_GPU -g $(GPROF_ENABLE) $(OPTIMIZE_ARGS) `sdl2-config --cflags` -I ../sdl-gpu/$(SDL_GPU_INSTALL_SUBDIR)/include -I SDL_FontCache -I NFont -c NFont/NFont.cpp -o ../../$(OBJ_NFONT_DIR)/NFont.o
+
+SRC_IMGUI_DIR := src_imgui
+OBJ_IMGUI_DIR := obj_imgui
+SRC_IMGUI_FILES := $(wildcard $(SRC_IMGUI_DIR)/*.cpp)
+OBJ_IMGUI_FILES := $(patsubst $(SRC_IMGUI_DIR)/%.cpp,$(OBJ_IMGUI_DIR)/%.o,$(SRC_IMGUI_FILES))
+
 init-imgui: _submodule-update
 	cd submodules/imgui
-	mkdir -p ../../src_imgui
-	mkdir -p ../../obj_imgui
-	cp *.cpp *.h ../../src_imgui
-	cp backends/imgui_impl_sdl.* ../../src_imgui
-	cp backends/imgui_impl_sdlrenderer.* ../../src_imgui
+	mkdir -p ../../$(SRC_IMGUI_DIR)
+	mkdir -p ../../$(OBJ_IMGUI_DIR)
+	cp *.cpp *.h ../../$(SRC_IMGUI_DIR)
+	cp backends/imgui_impl_sdl.* ../../$(SRC_IMGUI_DIR)
+	cp backends/imgui_impl_opengl3.* ../../$(SRC_IMGUI_DIR)
+	cp backends/imgui_impl_opengl3_loader.* ../../$(SRC_IMGUI_DIR)
 
 # Initialize project for Windows.
 init-win:
@@ -115,9 +173,11 @@ init-win:
 	$(MAKE)
 	$(MAKE) runtests
 
-.PHONY: _init-win-submodule-build init-win-entt init-win-googletest init-win-libsdl2pp
+WINDOWS_SUBMODULE_TARGETS := init-win-entt init-win-googletest init-win-libsdl2pp init-win-sdl-gpu init-nfont init-sdl-fontcache init-imgui
 
-_init-win-submodule-build: init-win-entt init-win-googletest init-win-libsdl2pp init-imgui
+.PHONY: _init-win-submodule-build $(WINDOWS_SUBMODULE_TARGETS)
+
+_init-win-submodule-build: $(WINDOWS_SUBMODULE_TARGETS)
 
 runtests: tests
 	for test in $(TEST_BINARIES);\
@@ -126,11 +186,6 @@ runtests: tests
 			$$test || exit 1;\
 			echo "Passed" $$test;\
 		done
-
-SRC_IMGUI_DIR := src_imgui
-OBJ_IMGUI_DIR := obj_imgui
-SRC_IMGUI_FILES := $(wildcard $(SRC_IMGUI_DIR)/*.cpp)
-OBJ_IMGUI_FILES := $(patsubst $(SRC_IMGUI_DIR)/%.cpp,$(OBJ_IMGUI_DIR)/%.o,$(SRC_IMGUI_FILES))
 
 SRC_DIR := src
 OBJ_DIR := obj
@@ -145,33 +200,30 @@ SRC_TEST_FILES += $(SRC_FILES)
 OBJ_TEST_FILES += $(OBJ_FILES)
 
 INCLUDES_IMGUI := -I src_imgui `sdl2-config --cflags`
-INCLUDES := $(INCLUDES_IMGUI) `sdl2-config --cflags` -I submodules/entt/src -I submodules/libSDL2pp
+INCLUDES := $(INCLUDES_IMGUI) `sdl2-config --cflags` -I submodules/entt/src -I submodules/libSDL2pp -I submodules/sdl-gpu/$(SDL_GPU_INSTALL_SUBDIR)/include -DFC_USE_SDL_GPU -I submodules/nfont/NFont
 INCLUDES_TEST := -I src -I submodules/googletest/googletest/include
 
 # Remove from the test object files any main obj files that have `main()`s.
 OBJ_TEST_FILES := $(filter-out $(OBJ_DIR)/main_%.o, $(OBJ_TEST_FILES))
 
-# ENV vars to control build.
-ifeq ($(PROFILE), 1)
-	GPROF_ENABLE = -pg
-endif
-
-ifeq ($(RELEASE), 1)
-	OPTIMIZE_ARGS = -flto -O3
-else
-	OPTIMIZE_ARGS = -O2
-endif
-
 CXXFLAGS      := -std=c++20 -g $(GPROF_ENABLE) $(OPTIMIZE_ARGS) -Wall -Werror -MMD
 CXXFLAGS_TEST := -std=c++20 -g $(GPROF_ENABLE) -Wall -Werror -MMD
 CXXFLAGS_IMGUI := -std=c++17 -g $(OPTIMIZE_ARGS) -Wall -Werror -MMD
 
-LD_FLAGS := $(GPROF_ENABLE) $(OPTIMIZE_ARGS) -L submodules/libSDL2pp -lSDL2pp `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer
+LD_FLAGS := $(GPROF_ENABLE) $(OPTIMIZE_ARGS) -L submodules/libSDL2pp -lSDL2pp `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer -L submodules/sdl-gpu/$(SDL_GPU_INSTALL_SUBDIR)/lib -Wl,-rpath,submodules/sdl-gpu/$(SDL_GPU_INSTALL_SUBDIR)/lib -lSDL2_gpu
 
 LD_TEST_FLAGS := -L submodules/googletest/build/lib -lgtest -lpthread
 
-$(BINARIES): $(OBJ_IMGUI_FILES) $(OBJ_FILES)
-	g++ -o $@ $^ $(LD_FLAGS)
+ifeq ($(DETECTED_OS),Windows)
+	LOCAL_DLLS := libSDL2_gpu.dll
+	LOCAL_DLLS_PATHS := $(LOCAL_DLLS:%=$(BUILD_DIR)/%)
+endif
+
+$(LOCAL_DLLS_PATHS):
+	cp submodules/sdl-gpu/$(SDL_GPU_INSTALL_SUBDIR)/bin/libSDL2_gpu.dll $(BUILD_DIR)/libSDL2_gpu.dll
+
+$(BINARIES):  $(OBJ_IMGUI_FILES) $(OBJ_NFONT_FILES) $(OBJ_FILES) $(LOCAL_DLLS_PATHS)
+	g++ -o $@ $(OBJ_IMGUI_FILES) $(OBJ_NFONT_FILES) $(OBJ_FILES) $(LD_FLAGS)
 
 $(TEST_BINARIES): $(OBJ_TEST_FILES)
 	g++ -o $@ $^ $(LD_TEST_FLAGS)
@@ -186,5 +238,6 @@ $(OBJ_IMGUI_DIR)/%.o: $(SRC_IMGUI_DIR)/%.cpp
 	g++ $(CXXFLAGS_IMGUI) $(INCLUDES_IMGUI) -c -o $@ $<
 
 -include $(OBJ_IMGUI_FILES:.o=.d)
+-include $(OBJ_NFONT_FILES:.o=.d)
 -include $(OBJ_FILES:.o=.d)
 -include $(OBJ_TEST_FILES:.o=.d)

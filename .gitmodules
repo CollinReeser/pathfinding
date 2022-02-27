@@ -10,3 +10,9 @@
 [submodule "submodules/imgui"]
 	path = submodules/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "submodules/sdl-gpu"]
+	path = submodules/sdl-gpu
+	url = https://github.com/grimfang4/sdl-gpu.git
+[submodule "submodules/nfont"]
+	path = submodules/nfont
+	url = https://github.com/grimfang4/nfont.git

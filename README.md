@@ -13,6 +13,7 @@ Some dependencies are handled as git submodules. The remaining dependencies are
 - `sdl2_image`
 - `sdl2_ttf`
 - `sdl2_mixer`
+- `glew`
 
 ## Windows Dependencies
 
@@ -30,6 +31,7 @@ elided in this build process (eg, generating submodule docs).
     - `pacman -S git`
     - `pacman -S mingw-w64-x86_64-make mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake`
     - `pacman -S mingw-w64-x86_64-SDL2 mingw-w64-x86_64-SDL2_gfx mingw-w64-x86_64-SDL2_image mingw-w64-x86_64-SDL2_mixer mingw-w64-x86_64-SDL2_ttf`
+    - `pacman -S mingw-w64-x86_64-glew`
 5. Establish an alias to `mingw32-make`, eg:
     - `echo 'alias make=/mingw64/bin/mingw32-make.exe' >> ~/.bashrc`
     - `source ~/.bashrc`

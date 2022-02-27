@@ -9,9 +9,13 @@
 
 #include "imgui.h"
 #include "imgui_impl_sdl.h"
-#include "imgui_impl_sdlrenderer.h"
+#include "imgui_impl_opengl3.h"
 
 #include <SDL2pp/SDL2pp.hh>
+
+#include <SDL_gpu.h>
+
+#include <NFont.h>
 
 #include <entt/entt.hpp>
 
@@ -21,18 +25,17 @@
 
 // const uint32_t SCREEN_WIDTH {640};
 // const uint32_t SCREEN_HEIGHT {480};
-const uint32_t SCREEN_WIDTH {640 * 2};
+const uint32_t SCREEN_WIDTH {640 * 3};
 const uint32_t SCREEN_HEIGHT {480 * 2};
 
 void pathfind_gfx(
     entt::registry &registry,
-    SDL2pp::SDL &sdl,
+    GPU_Target* screen,
     SDL2pp::Window &window,
-    SDL2pp::SDLTTF &sdl_ttf,
-    SDL2pp::Renderer &renderer,
     SDL2pp::Mixer &mixer,
     ImGuiIO &io,
     SDL2pp::Font &sdl_font,
+    NFont &font,
     ImFont* imgui_font
 ) {
     const uint32_t sprite_width {4};
@@ -120,7 +123,6 @@ void pathfind_gfx(
         0,
         0
     );
-    SDL2pp::Texture texture_obstacle(renderer, sprite_obstacle);
 
     SDL2pp::Surface sprite_open(
         pix_open,
@@ -133,7 +135,6 @@ void pathfind_gfx(
         0,
         0
     );
-    SDL2pp::Texture texture_open(renderer, sprite_open);
 
     SDL2pp::Surface sprite_path(
         pix_path,
@@ -146,7 +147,18 @@ void pathfind_gfx(
         0,
         0
     );
-    SDL2pp::Texture texture_path(renderer, sprite_path);
+
+    GPU_Image* texture_obstacle = GPU_CopyImageFromSurface(sprite_obstacle.Get());
+    GPU_Image* texture_open = GPU_CopyImageFromSurface(sprite_open.Get());
+    GPU_Image* texture_path = GPU_CopyImageFromSurface(sprite_path.Get());
+
+    auto free_guard = Guard(
+        [=]() {
+            GPU_FreeImage(texture_obstacle);
+            GPU_FreeImage(texture_open);
+            GPU_FreeImage(texture_path);
+        }
+    );
 
     std::vector<std::pair<uint32_t, uint32_t>> open_spaces;
 
@@ -177,6 +189,16 @@ void pathfind_gfx(
 
     std::chrono::microseconds dur_flip {1};
 
+    auto start_clear = std::chrono::steady_clock::now();
+    auto end_clear = std::chrono::steady_clock::now();
+
+    std::chrono::microseconds dur_clear {1};
+
+    auto start_font = std::chrono::steady_clock::now();
+    auto end_font = std::chrono::steady_clock::now();
+
+    std::chrono::microseconds dur_font {1};
+
     auto start_pathfinding = std::chrono::steady_clock::now();
     auto end_pathfinding = std::chrono::steady_clock::now();
 
@@ -184,9 +206,72 @@ void pathfind_gfx(
 
     const uint32_t num_pathfinds {100};
 
+    // Does not cull the clipped area from calculations, but does make it
+    // black.
+
+    // GPU_SetClip(
+    //     screen,
+    //     2, 2, SCREEN_WIDTH - 32, SCREEN_HEIGHT - 32
+    // );
+
+    GPU_EnableCamera(screen, GPU_TRUE);
+
+    {
+        GPU_Camera cam = GPU_GetCamera(screen);
+        std::cout
+            << "Cam values:" << std::endl
+            << "  x: " << cam.x << std::endl
+            << "  y: " << cam.y << std::endl
+            << "  z: " << cam.z << std::endl
+            << "  angle: " << cam.angle << std::endl
+            << "  zoom_x: " << cam.zoom_x << std::endl
+            << "  zoom_y: " << cam.zoom_y << std::endl
+            << "  z_near: " << cam.z_near << std::endl
+            << "  z_far: " << cam.z_far << std::endl
+            ;
+    }
+
+    // Will be used to cache the map texture since it changes infrequently.
+    GPU_Image* map_image = nullptr;
+    auto free_map_image = Guard(
+        [=]() {
+            if (map_image != nullptr) {
+                GPU_FreeImage(map_image);
+            }
+        }
+    );
+
     bool done = false;
     while (!done) {
-        renderer.Clear();
+        uint32_t drawn_sprites {0};
+
+        start_clear = std::chrono::steady_clock::now();
+
+        GPU_Clear(screen);
+
+        end_clear = std::chrono::steady_clock::now();
+
+        dur_clear = std::chrono::duration_cast<std::chrono::microseconds>(
+            end_clear - start_clear
+        );
+
+        // This allows controlling of the "camera", literally able to
+        // pan/zoom/etc against the texture of the target.
+        GPU_Camera cam = GPU_GetCamera(screen);
+        // cam.x -= 1;
+        // cam.y -= 1;
+        // cam.angle += 0.01;
+        // cam.zoom_x += 0.01;
+        // cam.zoom_y += 0.01;
+        // cam.z_near += 0.1;
+        // cam.zoom_y += 0.01;
+        GPU_SetCamera(screen, &cam);
+
+        // This will fit the GPU_Target into the target rectangle within the
+        // window, while the target itself can still be treated as though it is
+        // mapped to fill the whole window itself.
+
+        // GPU_SetViewport(screen, GPU_Rect(0, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2));
 
         // Poll and handle events (inputs, window resize, etc.)
         //
@@ -246,49 +331,65 @@ void pathfind_gfx(
             }
         }
 
-        // Only rendering one texture at a time substantially improves
-        // performance. Switching between two textures back and forth is 3x+
-        // slower, worse on Windows than in VM.
-        for (const auto &node : map.get_nodes()) {
-            const uint32_t x_node {node.x_coord};
-            const uint32_t y_node {node.y_coord};
+        // This block is drawing what is essentially the "map". Since it's
+        // static, or changes rarely, we can cache this blitting as an image and
+        // draw _that_ on subsequent frames, at least until anything changes.
+        // This can provide a 50x+ speedup for large maps.
+        if (map_image == nullptr) {
+            // Only rendering one texture at a time substantially improves
+            // performance. Switching between two textures back and forth is 3x+
+            // slower, worse on Windows than in VM.
+            for (const auto &node : map.get_nodes()) {
+                const uint32_t x_node {node.x_coord};
+                const uint32_t y_node {node.y_coord};
 
-            const uint32_t x_frame {x_node * sprite_width};
-            const uint32_t y_frame {y_node * sprite_height};
+                const uint32_t x_frame {x_node * sprite_width};
+                const uint32_t y_frame {y_node * sprite_height};
 
-            if (node.blocking) {
-                renderer.Copy(
-                    texture_obstacle,
-                    SDL2pp::NullOpt,
-                    SDL2pp::Rect(
+                if (node.blocking) {
+                    GPU_Blit(
+                        texture_obstacle,
+                        nullptr,
+                        screen,
                         x_frame,
-                        y_frame,
-                        sprite_width,
-                        sprite_height
-                    )
-                );
+                        y_frame
+                    );
+
+                    ++drawn_sprites;
+                }
             }
+
+            for (const auto &node : map.get_nodes()) {
+                const uint32_t x_node {node.x_coord};
+                const uint32_t y_node {node.y_coord};
+
+                const uint32_t x_frame {x_node * sprite_width};
+                const uint32_t y_frame {y_node * sprite_height};
+
+                if (!node.blocking) {
+                    GPU_Blit(
+                        texture_open,
+                        nullptr,
+                        screen,
+                        x_frame,
+                        y_frame
+                    );
+
+                    ++drawn_sprites;
+                }
+            }
+
+            map_image = GPU_CopyImageFromTarget(screen);
         }
+        else {
+            GPU_Rect map_rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-        for (const auto &node : map.get_nodes()) {
-            const uint32_t x_node {node.x_coord};
-            const uint32_t y_node {node.y_coord};
-
-            const uint32_t x_frame {x_node * sprite_width};
-            const uint32_t y_frame {y_node * sprite_height};
-
-            if (!node.blocking) {
-                renderer.Copy(
-                    texture_open,
-                    SDL2pp::NullOpt,
-                    SDL2pp::Rect(
-                        x_frame,
-                        y_frame,
-                        sprite_width,
-                        sprite_height
-                    )
-                );
-            }
+            GPU_BlitRect(
+                map_image,
+                nullptr,
+                screen,
+                &map_rect
+            );
         }
 
         // Get the position on the map that the click corresponds to, dropping
@@ -306,16 +407,15 @@ void pathfind_gfx(
             mouse_state == SDL_PRESSED &&
             !map.is_blocking(x_click_map, y_click_map)
         ) {
-            renderer.Copy(
+            GPU_Blit(
                 texture_path,
-                SDL2pp::NullOpt,
-                SDL2pp::Rect(
-                    x_click_normal,
-                    y_click_normal,
-                    sprite_width,
-                    sprite_height
-                )
+                nullptr,
+                screen,
+                x_click_normal,
+                y_click_normal
             );
+
+            ++drawn_sprites;
 
             const uint32_t x_mouse_map = x_mouse / sprite_width;
             const uint32_t y_mouse_map = y_mouse / sprite_height;
@@ -324,16 +424,15 @@ void pathfind_gfx(
             const uint32_t y_mouse_normal = y_mouse_map * sprite_height;
 
             if (!map.is_blocking(x_mouse_map, y_mouse_map)) {
-                renderer.Copy(
+                GPU_Blit(
                     texture_path,
-                    SDL2pp::NullOpt,
-                    SDL2pp::Rect(
-                        x_mouse_normal,
-                        y_mouse_normal,
-                        sprite_width,
-                        sprite_height
-                    )
+                    nullptr,
+                    screen,
+                    x_mouse_normal,
+                    y_mouse_normal
                 );
+
+                ++drawn_sprites;
 
                 {
 
@@ -352,16 +451,15 @@ void pathfind_gfx(
                         const uint32_t x_path = x_path_map * sprite_width;
                         const uint32_t y_path = y_path_map * sprite_height;
 
-                        renderer.Copy(
+                        GPU_Blit(
                             texture_path,
-                            SDL2pp::NullOpt,
-                            SDL2pp::Rect(
-                                x_path,
-                                y_path,
-                                sprite_width,
-                                sprite_height
-                            )
+                            nullptr,
+                            screen,
+                            x_path,
+                            y_path
                         );
+
+                        ++drawn_sprites;
                     }
                 }
 
@@ -387,16 +485,15 @@ void pathfind_gfx(
                             const uint32_t x_path = x_path_map * sprite_width;
                             const uint32_t y_path = y_path_map * sprite_height;
 
-                            renderer.Copy(
+                            GPU_Blit(
                                 texture_path,
-                                SDL2pp::NullOpt,
-                                SDL2pp::Rect(
-                                    x_path,
-                                    y_path,
-                                    sprite_width,
-                                    sprite_height
-                                )
+                                nullptr,
+                                screen,
+                                x_path,
+                                y_path
                             );
+
+                            ++drawn_sprites;
                         }
 
                         ++loops;
@@ -419,102 +516,79 @@ void pathfind_gfx(
             }
         }
 
-        std::ostringstream oss_pft;
-        oss_pft << "Per-frame time (ms): " << frame_dur.count() / 1000;
+        if (frames % 60 == 0) {
+            start_font = std::chrono::steady_clock::now();
+        }
 
-        SDL2pp::Texture text_frame_time(
-            renderer,
-            sdl_font.RenderText_Solid(
-                oss_pft.str().c_str(),
-                SDL_Color{0, 0, 255, 255}
+        font.draw(
+            screen, 0, 0, SDL_Color{0, 0, 0, 255},
+            "Per-frame time (ms): %d", static_cast<uint32_t>(
+                frame_dur.count() / 1000
             )
         );
 
-        const auto frame_time_size_point {text_frame_time.GetSize()};
-
-        renderer.Copy(
-            text_frame_time,
-            SDL2pp::NullOpt,
-            SDL2pp::Rect(
-                0, 0,
-                frame_time_size_point.GetX(),
-                frame_time_size_point.GetY()
-            )
+        font.draw(
+            screen, 0, font.getHeight(), SDL_Color{0, 0, 0, 255},
+            "Flip time (us): %d", static_cast<uint32_t>(dur_flip.count())
         );
 
-        std::ostringstream oss_fps;
-        oss_fps
-            << "FPS: "
-            << static_cast<uint32_t>(
+        font.draw(
+            screen, 0, font.getHeight() * 2, SDL_Color{0, 0, 0, 255},
+            "Clear time (us): %d", static_cast<uint32_t>(dur_clear.count())
+        );
+
+        font.draw(
+            screen, 0, font.getHeight() * 3, SDL_Color{0, 0, 0, 255},
+            "FPS: %d", static_cast<uint32_t>(
                 (1000.0 / (frame_dur.count() / 1000.0))
+            )
+        );
+
+        font.draw(
+            screen, 0, font.getHeight() * 4, SDL_Color{0, 0, 0, 255},
+            "Pathfinding per (us): %d", static_cast<uint32_t>(
+                dur_pathfinding.count() / num_pathfinds
+            )
+        );
+
+        font.draw(
+            screen, 0, font.getHeight() * 5, SDL_Color{0, 0, 0, 255},
+            "Pathfinding total (ms): %d", static_cast<uint32_t>(
+                dur_pathfinding.count() / 1000
+            )
+        );
+
+        font.draw(
+            screen, 0, font.getHeight() * 6, SDL_Color{0, 0, 0, 255},
+            "Font time (us): %d", static_cast<uint32_t>(dur_font.count())
+        );
+
+        font.draw(
+            screen, 0, font.getHeight() * 7, SDL_Color{0, 0, 0, 255},
+            "Drawn sprites: %d", drawn_sprites
+        );
+
+        font.drawBox(
+            screen, SDL_Rect(0, font.getHeight() * 10, 400, 100),
+            "The quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog..."
+        );
+
+        font.drawColumn(
+            screen, 600, font.getHeight() * 10, 400,
+            "The quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog..."
+        );
+
+        if (frames % 60 == 0) {
+            end_font = std::chrono::steady_clock::now();
+
+            dur_font = std::chrono::duration_cast<std::chrono::microseconds>(
+                end_font - start_font
             );
-
-        SDL2pp::Texture text_fps(
-            renderer,
-            sdl_font.RenderText_Solid(
-                oss_fps.str().c_str(),
-                SDL_Color{0, 0, 255, 255}
-            )
-        );
-
-        renderer.Copy(
-            text_fps,
-            SDL2pp::NullOpt,
-            SDL2pp::Rect(
-                SDL2pp::Point(0, frame_time_size_point.GetY()),
-                text_fps.GetSize()
-            )
-        );
-
-        std::ostringstream oss_pathfinding;
-        oss_pathfinding
-            << "Pathfinding (us): " << dur_pathfinding.count() / num_pathfinds;
-
-        SDL2pp::Texture text_pathfinding_time(
-            renderer,
-            sdl_font.RenderText_Solid(
-                oss_pathfinding.str().c_str(),
-                SDL_Color{0, 0, 255, 255}
-            )
-        );
-
-        const auto pathfinding_time_size_point {
-            text_pathfinding_time.GetSize()
-        };
-
-        renderer.Copy(
-            text_pathfinding_time,
-            SDL2pp::NullOpt,
-            SDL2pp::Rect(
-                SDL2pp::Point(0, pathfinding_time_size_point.GetY() * 2),
-                text_pathfinding_time.GetSize()
-            )
-        );
-
-        std::ostringstream oss_flip_time;
-        oss_flip_time
-            << "Flip time (ms): " << (dur_flip.count() / 1000);
-
-        SDL2pp::Texture text_flip_time(
-            renderer,
-            sdl_font.RenderText_Solid(
-                oss_flip_time.str().c_str(),
-                SDL_Color{0, 0, 255, 255}
-            )
-        );
-
-        renderer.Copy(
-            text_flip_time,
-            SDL2pp::NullOpt,
-            SDL2pp::Rect(
-                SDL2pp::Point(0, pathfinding_time_size_point.GetY() * 3),
-                text_flip_time.GetSize()
-            )
-        );
+        }
 
         start_flip = std::chrono::steady_clock::now();
 
-        renderer.Present();
+        GPU_Flip(screen);
 
         end_flip = std::chrono::steady_clock::now();
 
@@ -537,10 +611,9 @@ void pathfind_gfx(
 }
 
 void demo_gfx(
-    SDL2pp::SDL &sdl,
     SDL2pp::Window &window,
     SDL2pp::SDLTTF &sdl_ttf,
-    SDL2pp::Renderer &renderer,
+    GPU_Target* screen,
     SDL2pp::Mixer &mixer,
     ImGuiIO &io,
     SDL2pp::Font &sdl_font,
@@ -549,8 +622,12 @@ void demo_gfx(
     uint32_t sprite_1_width = SCREEN_WIDTH / 8;
     uint32_t sprite_1_height = SCREEN_HEIGHT / 8;
 
-    // SDL_image support
-    SDL2pp::Texture sprite2(renderer, "assets/test.png");
+    GPU_Image* sprite2 = GPU_LoadImage("assets/test.png");
+    auto free_sprite2 = Guard(
+        [=]() {
+            GPU_FreeImage(sprite2);
+        }
+    );
 
     const SDL_PixelFormat* const pixel_format = SDL_AllocFormat(
         SDL_PIXELFORMAT_ARGB8888
@@ -625,20 +702,30 @@ void demo_gfx(
         0
     );
 
-    SDL2pp::Texture sprite1(renderer, sprite1_surface);
+    GPU_Image* sprite1 = GPU_CopyImageFromSurface(sprite1_surface.Get());
+    auto free_sprite1 = Guard(
+        [=]() {
+            GPU_FreeImage(sprite1);
+        }
+    );
 
-    // Also note a safe way to specify null rects and points
-    renderer.Copy(sprite1, SDL2pp::NullOpt, SDL2pp::NullOpt);
-    renderer.Copy(
-        sprite1,
-        SDL2pp::NullOpt,
-        SDL2pp::Rect(
+    GPU_BlitRect(sprite1, nullptr, screen, nullptr);
+
+    {
+        GPU_Rect target_rect(
             SCREEN_WIDTH / 4,
             SCREEN_HEIGHT / 4,
             SCREEN_WIDTH / 2,
             SCREEN_HEIGHT / 2
-        )
-    );
+        );
+
+        GPU_BlitRect(
+            sprite1,
+            nullptr,
+            screen,
+            &target_rect
+        );
+    }
 
     uint32_t pixels_2_width {255};
     uint32_t pixels_2_height {255};
@@ -670,50 +757,74 @@ void demo_gfx(
         0
     );
 
-    SDL2pp::Texture sprite2_surface_texture(renderer, sprite2_surface);
-    sprite2_surface_texture.SetBlendMode(SDL_BLENDMODE_BLEND);
-    sprite2_surface_texture.SetAlphaMod(192);
+    GPU_Image* sprite2_surface_texture = GPU_CopyImageFromSurface(
+        sprite2_surface.Get()
+    );
+    auto free_sprite2_surface_texture = Guard(
+        [=]() {
+            GPU_FreeImage(sprite2_surface_texture);
+        }
+    );
 
-    renderer.Copy(
-        sprite2_surface_texture,
-        SDL2pp::NullOpt,
-        SDL2pp::Rect(
+    GPU_SetBlending(sprite2_surface_texture, 1);
+    GPU_SetBlendMode(sprite2_surface_texture, GPU_BLEND_NORMAL);
+    GPU_SetRGBA(sprite2_surface_texture, 255, 255, 255, 192);
+
+    {
+        GPU_Rect target_rect(
             SCREEN_WIDTH / 4 * 3,
             SCREEN_HEIGHT / 8 * 3,
             pixels_2_width,
             pixels_2_height
-        )
-    );
+        );
+
+        GPU_BlitRect(
+            sprite2_surface_texture,
+            nullptr,
+            screen,
+            &target_rect
+        );
+    }
 
     // OGG sound file
     SDL2pp::Chunk sound("assets/test.ogg");
 
-    // Create texture from surface containing text rendered by SDL_ttf
-    SDL2pp::Texture text(
-        renderer,
-        sdl_font.RenderText_Solid("Hello, world!",
-        SDL_Color{255, 255, 255, 255})
+    auto text_surface = sdl_font.RenderText_Solid(
+        "Hello, world!",
+        SDL_Color{255, 255, 255, 255}
+    );
+    GPU_Image* text = GPU_CopyImageFromSurface(text_surface.Get());
+    auto free_text = Guard(
+        [=]() {
+            GPU_FreeImage(text);
+        }
     );
 
-    // There are multiple convenient ways to construct e.g. a Rect;
-    // Objects provide extensive set of getters
-    renderer.Copy(
-        text,
-        SDL2pp::NullOpt,
-        SDL2pp::Rect(SDL2pp::Point(0, 0), text.GetSize())
+    {
+        GPU_Rect target_rect(
+            0, 0, text->base_w, text->base_h
+        );
+
+        GPU_BlitRect(
+            text,
+            nullptr,
+            screen,
+            &target_rect
+        );
+    }
+
+    GPU_BlitRectX(
+        sprite2,
+        nullptr,
+        screen,
+        nullptr,
+        45,
+        text->base_w / 4,
+        text->base_h,
+        GPU_FLIP_NONE
     );
 
-    renderer.Copy(
-        text,
-        SDL2pp::NullOpt,
-        SDL2pp::Rect(32, 32, 512, 256)
-    );
-
-    // Copy() is overloaded, providing access to both SDL_RenderCopy and
-    // SDL_RenderCopyEx
-    renderer.Copy(sprite2, SDL2pp::NullOpt, SDL2pp::NullOpt, 45.0);
-
-    renderer.Present();
+    GPU_Flip(screen);
 
     // Play our sound one time on a first available mixer channel
     mixer.PlayChannel(-1, sound);
@@ -793,7 +904,7 @@ void demo_gfx(
         }
 
         // Start the Dear ImGui frame
-        ImGui_ImplSDLRenderer_NewFrame();
+        ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
@@ -871,21 +982,32 @@ void demo_gfx(
             if (ImGui::Button("Close Me")) {
                 show_another_window = false;
             }
+
+            GPU_Renderer* renderer = GPU_GetCurrentRenderer();
+            GPU_RendererID id = renderer->id;
+
+            ImGui::Text("Using renderer: %s (%d.%d)\n", id.name, id.major_version, id.minor_version);
+            ImGui::Text("  Shader versions supported: %d to %d\n\n", renderer->min_shader_version, renderer->max_shader_version);
+
             ImGui::End();
         }
 
         // Rendering
         ImGui::Render();
-        SDL_SetRenderDrawColor(
-            renderer.Get(),
-            (Uint8)(clear_color.x * 255),
-            (Uint8)(clear_color.y * 255),
-            (Uint8)(clear_color.z * 255),
-            (Uint8)(clear_color.w * 255)
+
+        GPU_ClearColor(
+            screen,
+            SDL_Color(
+                (uint8_t)(clear_color.x * 255),
+                (uint8_t)(clear_color.y * 255),
+                (uint8_t)(clear_color.z * 255),
+                (uint8_t)(clear_color.w * 255)
+            )
         );
-        SDL_RenderClear(renderer.Get());
-        ImGui_ImplSDLRenderer_RenderDrawData(ImGui::GetDrawData());
-        SDL_RenderPresent(renderer.Get());
+
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        GPU_Flip(screen);
     }
 
     return;
@@ -897,25 +1019,38 @@ int main(int argc, char** argv) {
     std::cout << "Hello, world!" << std::endl;
 
     try {
-        // Init SDL; will be automatically deinitialized when the object is
-        // destroyed
-        SDL2pp::SDL sdl(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+        GPU_SetDebugLevel(GPU_DEBUG_LEVEL_MAX);
+
+        // Unlock framerate.
+        GPU_SetPreInitFlags(GPU_INIT_DISABLE_VSYNC);
+
+        GPU_Target* screen = GPU_Init(
+            SCREEN_WIDTH, SCREEN_HEIGHT,
+            GPU_DEFAULT_INIT_FLAGS
+        );
+
+        // SDL_GL_SetSwapInterval(0);
+
+        if (screen == nullptr) {
+            std::cerr << "Failed to initialize sdl-gpu." << std::endl;
+
+            exit(1);
+        }
+
+        auto guard = Guard(
+            []() {
+                GPU_Quit();
+            }
+        );
+
+        GPU_SetDefaultAnchor(0, 0);
 
         // Likewise, init SDL_ttf library
         SDL2pp::SDLTTF sdl_ttf;
 
-        // Straightforward wrappers around corresponding SDL2 objects
-        // These take full care of proper object destruction and error checking
-        SDL2pp::Window window(
-            "libSDL2pp demo",
-            SDL_WINDOWPOS_UNDEFINED,
-            SDL_WINDOWPOS_UNDEFINED,
-            SCREEN_WIDTH,
-            SCREEN_HEIGHT,
-            SDL_WINDOW_RESIZABLE
-        );
-
-        SDL2pp::Renderer renderer(window, -1, SDL_RENDERER_ACCELERATED);
+        SDL_GLContext& gl_context = screen->context->context;
+        SDL_Window* window_ptr = SDL_GetWindowFromID(screen->context->windowID);
+        SDL2pp::Window window(window_ptr);
 
         // Initialize audio mixer
         SDL2pp::Mixer mixer(
@@ -933,20 +1068,22 @@ int main(int argc, char** argv) {
         ImGui::StyleColorsDark();
 
         // Setup Platform/Renderer backends
-        ImGui_ImplSDL2_InitForSDLRenderer(window.Get(), renderer.Get());
-        ImGui_ImplSDLRenderer_Init(renderer.Get());
+        ImGui_ImplSDL2_InitForOpenGL(window.Get(), gl_context);
+
+        const char* glsl_version = "#version 120";
+        ImGui_ImplOpenGL3_Init(glsl_version);
 
         // SDL_ttf font
         SDL2pp::Font sdl_font("assets/Vera.ttf", 20);
+        NFont font("assets/Vera.ttf", 20);
 
         ImFont* imgui_font = io.Fonts->AddFontFromFileTTF("assets/Vera.ttf", 16.0f);
         IM_ASSERT(imgui_font != NULL);
 
         // demo_gfx(
-        //     sdl,
         //     window,
         //     sdl_ttf,
-        //     renderer,
+        //     screen,
         //     mixer,
         //     io,
         //     sdl_font,
@@ -955,13 +1092,12 @@ int main(int argc, char** argv) {
 
         pathfind_gfx(
             registry,
-            sdl,
+            screen,
             window,
-            sdl_ttf,
-            renderer,
             mixer,
             io,
             sdl_font,
+            font,
             imgui_font
         );
 
