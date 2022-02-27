@@ -2,4 +2,7 @@ build/*
 build_test/*
 obj/*
 obj_test/*
+src_imgui/*
+obj_imgui/*
+obj_nfont/*
 

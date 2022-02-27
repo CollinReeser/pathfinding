@@ -43,10 +43,10 @@ all: $(BINARIES) tests
 tests: $(TEST_BINARIES)
 
 clean:
-	rm -rf $(OBJ_DIR)
-	rm -rf $(OBJ_TEST_DIR)
-	rm -rf $(BUILD_DIR)
-	rm -rf $(BUILD_TEST_DIR)
+	rm -rf $(OBJ_DIR)/*
+	rm -rf $(OBJ_TEST_DIR)/*
+	rm -rf $(BUILD_DIR)/*
+	rm -rf $(BUILD_TEST_DIR)/*
 
 realclean: clean
 	rm -rf $(SRC_IMGUI_DIR)
@@ -65,10 +65,6 @@ realclean: clean
 # Initialize project for Linux.
 init:
 	$(MAKE) _init-submodule-build
-	mkdir -p $(OBJ_DIR)
-	mkdir -p $(OBJ_TEST_DIR)
-	mkdir -p $(BUILD_DIR)
-	mkdir -p $(BUILD_TEST_DIR)
 	$(MAKE)
 	$(MAKE) runtests
 
@@ -222,19 +218,34 @@ endif
 $(LOCAL_DLLS_PATHS):
 	cp submodules/sdl-gpu/$(SDL_GPU_INSTALL_SUBDIR)/bin/libSDL2_gpu.dll $(BUILD_DIR)/libSDL2_gpu.dll
 
-$(BINARIES):  $(OBJ_IMGUI_FILES) $(OBJ_NFONT_FILES) $(OBJ_FILES) $(LOCAL_DLLS_PATHS)
-	g++ -o $@ $(OBJ_IMGUI_FILES) $(OBJ_NFONT_FILES) $(OBJ_FILES) $(LD_FLAGS)
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
 
-$(TEST_BINARIES): $(OBJ_TEST_FILES)
-	g++ -o $@ $^ $(LD_TEST_FLAGS)
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 	g++ $(CXXFLAGS) $(INCLUDES) -c -o $@ $<
 
-$(OBJ_TEST_DIR)/%.o: $(SRC_TEST_DIR)/%.cpp
+$(BINARIES):  $(OBJ_IMGUI_FILES) $(OBJ_NFONT_FILES) $(OBJ_FILES) $(LOCAL_DLLS_PATHS) | $(BUILD_DIR)
+	g++ -o $@ $(OBJ_IMGUI_FILES) $(OBJ_NFONT_FILES) $(OBJ_FILES) $(LD_FLAGS)
+
+$(OBJ_TEST_DIR):
+	mkdir -p $(OBJ_TEST_DIR)
+
+$(BUILD_TEST_DIR):
+	mkdir -p $(BUILD_TEST_DIR)
+
+$(OBJ_TEST_DIR)/%.o: $(SRC_TEST_DIR)/%.cpp | $(OBJ_TEST_DIR)
 	g++ $(CXXFLAGS_TEST) $(INCLUDES_TEST) -c -o $@ $<
 
-$(OBJ_IMGUI_DIR)/%.o: $(SRC_IMGUI_DIR)/%.cpp
+$(TEST_BINARIES): $(OBJ_TEST_FILES) | $(BUILD_TEST_DIR)
+	g++ -o $@ $^ $(LD_TEST_FLAGS)
+
+$(OBJ_IMGUI_DIR):
+	mkdir -p $(OBJ_IMGUI_DIR)
+
+$(OBJ_IMGUI_DIR)/%.o: $(SRC_IMGUI_DIR)/%.cpp | $(OBJ_IMGUI_DIR)
 	g++ $(CXXFLAGS_IMGUI) $(INCLUDES_IMGUI) -c -o $@ $<
 
 -include $(OBJ_IMGUI_FILES:.o=.d)
