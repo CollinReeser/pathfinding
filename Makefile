@@ -43,13 +43,15 @@ all: $(BINARIES) tests
 tests: $(TEST_BINARIES)
 
 clean:
-	rm -f build/*
-	rm -f build_test/*
-	rm -f obj/*
-	rm -f obj_test/*
+	rm -rf $(OBJ_DIR)
+	rm -rf $(OBJ_TEST_DIR)
+	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_TEST_DIR)
 
 realclean: clean
-	rm -f obj_imgui/*
+	rm -rf $(SRC_IMGUI_DIR)
+	rm -rf $(OBJ_IMGUI_DIR)
+	rm -rf $(OBJ_NFONT_DIR)
 	rm -rf submodules/*
 
 # Submodule versions:
@@ -63,10 +65,10 @@ realclean: clean
 # Initialize project for Linux.
 init:
 	$(MAKE) _init-submodule-build
-	mkdir -p obj
-	mkdir -p obj_test
-	mkdir -p build
-	mkdir -p build_test
+	mkdir -p $(OBJ_DIR)
+	mkdir -p $(OBJ_TEST_DIR)
+	mkdir -p $(BUILD_DIR)
+	mkdir -p $(BUILD_TEST_DIR)
 	$(MAKE)
 	$(MAKE) runtests
 
@@ -118,12 +120,6 @@ init-win-libsdl2pp: _submodule-update
 
 SDL_GPU_INSTALL_SUBDIR := $(if $(filter Windows,$(DETECTED_OS)),SDL_gpu-MINGW,SDL_gpu)
 
-# ifeq ($(DETECTED_OS),Windows)
-# 	SDL_GPU_INSTALL_SUBDIR := SDL_gpu-MINGW
-# else
-# 	SDL_GPU_INSTALL_SUBDIR := SDL_gpu
-# endif
-
 init-sdl-gpu: _submodule-update
 	cd submodules/sdl-gpu
 	cmake . -G "Unix Makefiles"
@@ -136,7 +132,7 @@ init-win-sdl-gpu: _submodule-update
 	cmake . -G "MinGW Makefiles"
 	$(MAKE)
 	# Make sure the expected install dir has been created.
-	ls $(SDL_GPU_INSTALL_SUBDIR)	
+	ls $(SDL_GPU_INSTALL_SUBDIR)
 
 INIT_SDL_FONTCACHE_DEP := $(if $(filter Windows,$(DETECTED_OS)),init-win-sdl-gpu,init-sdl-gpu)
 
@@ -164,7 +160,8 @@ init-imgui: _submodule-update
 	mkdir -p ../../$(OBJ_IMGUI_DIR)
 	cp *.cpp *.h ../../$(SRC_IMGUI_DIR)
 	cp backends/imgui_impl_sdl.* ../../$(SRC_IMGUI_DIR)
-	cp backends/imgui_impl_sdlrenderer.* ../../$(SRC_IMGUI_DIR)
+	cp backends/imgui_impl_opengl3.* ../../$(SRC_IMGUI_DIR)
+	cp backends/imgui_impl_opengl3_loader.* ../../$(SRC_IMGUI_DIR)
 
 # Initialize project for Windows.
 init-win:
