@@ -207,6 +207,40 @@ void pathfind_gfx(
 
     const uint32_t num_pathfinds {100};
 
+    // Does not cull the clipped area from calculations, but does make it
+    // black.
+    GPU_SetClip(
+        screen,
+        2, 2, SCREEN_WIDTH - 32, SCREEN_HEIGHT - 32
+    );
+
+    GPU_EnableCamera(screen, GPU_TRUE);
+
+    {
+        GPU_Camera cam = GPU_GetCamera(screen);
+        std::cout
+            << "Cam values:" << std::endl
+            << "  x: " << cam.x << std::endl
+            << "  y: " << cam.y << std::endl
+            << "  z: " << cam.z << std::endl
+            << "  angle: " << cam.angle << std::endl
+            << "  zoom_x: " << cam.zoom_x << std::endl
+            << "  zoom_y: " << cam.zoom_y << std::endl
+            << "  z_near: " << cam.z_near << std::endl
+            << "  z_far: " << cam.z_far << std::endl
+            ;
+    }
+
+    // Will be used to cache the map texture since it changes infrequently.
+    GPU_Image* map_image = nullptr;
+    auto free_map_image = Guard(
+        [=]() {
+            if (free_map_image != nullptr) {
+                GPU_FreeImage(free_map_image);
+            }
+        }
+    );
+
     bool done = false;
     while (!done) {
         uint32_t drawn_sprites {0};
@@ -220,6 +254,23 @@ void pathfind_gfx(
         dur_clear = std::chrono::duration_cast<std::chrono::microseconds>(
             end_clear - start_clear
         );
+
+        // This allows controlling of the "camera", literally able to
+        // pan/zoom/etc against the texture of the target.
+        GPU_Camera cam = GPU_GetCamera(screen);
+        // cam.x -= 1;
+        // cam.y -= 1;
+        // cam.angle += 0.05;
+        // cam.zoom_x += 0.01;
+        // cam.zoom_y += 0.01;
+        // cam.z_near += 0.1;
+        // cam.zoom_y += 0.01;
+        GPU_SetCamera(screen, &cam);
+
+        // This will fit the GPU_Target into the target rectangle within the
+        // window, while the target itself can still be treated as though it is
+        // mapped to fill the whole window itself.
+        // GPU_SetViewport(screen, GPU_Rect(0, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2));
 
         // Poll and handle events (inputs, window resize, etc.)
         //
@@ -279,47 +330,65 @@ void pathfind_gfx(
             }
         }
 
-        // Only rendering one texture at a time substantially improves
-        // performance. Switching between two textures back and forth is 3x+
-        // slower, worse on Windows than in VM.
-        for (const auto &node : map.get_nodes()) {
-            const uint32_t x_node {node.x_coord};
-            const uint32_t y_node {node.y_coord};
+        // This block is drawing what is essentially the "map". Since it's
+        // static, or changes rarely, we can cache this blitting as an image and
+        // draw _that_ on subsequent frames, at least until anything changes.
+        // This can provide a 50x+ speedup for large maps.
+        if (map_image == nullptr) {
+            // Only rendering one texture at a time substantially improves
+            // performance. Switching between two textures back and forth is 3x+
+            // slower, worse on Windows than in VM.
+            for (const auto &node : map.get_nodes()) {
+                const uint32_t x_node {node.x_coord};
+                const uint32_t y_node {node.y_coord};
 
-            const uint32_t x_frame {x_node * sprite_width};
-            const uint32_t y_frame {y_node * sprite_height};
+                const uint32_t x_frame {x_node * sprite_width};
+                const uint32_t y_frame {y_node * sprite_height};
 
-            if (node.blocking) {
-                GPU_Blit(
-                    texture_obstacle,
-                    nullptr,
-                    screen,
-                    x_frame,
-                    y_frame
-                );
+                if (node.blocking) {
+                    GPU_Blit(
+                        texture_obstacle,
+                        nullptr,
+                        screen,
+                        x_frame,
+                        y_frame
+                    );
 
-                ++drawn_sprites;
+                    ++drawn_sprites;
+                }
             }
+
+            for (const auto &node : map.get_nodes()) {
+                const uint32_t x_node {node.x_coord};
+                const uint32_t y_node {node.y_coord};
+
+                const uint32_t x_frame {x_node * sprite_width};
+                const uint32_t y_frame {y_node * sprite_height};
+
+                if (!node.blocking) {
+                    GPU_Blit(
+                        texture_open,
+                        nullptr,
+                        screen,
+                        x_frame,
+                        y_frame
+                    );
+
+                    ++drawn_sprites;
+                }
+            }
+
+            map_image = GPU_CopyImageFromTarget(screen);
         }
+        else {
+            GPU_Rect map_rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-        for (const auto &node : map.get_nodes()) {
-            const uint32_t x_node {node.x_coord};
-            const uint32_t y_node {node.y_coord};
-
-            const uint32_t x_frame {x_node * sprite_width};
-            const uint32_t y_frame {y_node * sprite_height};
-
-            if (!node.blocking) {
-                GPU_Blit(
-                    texture_open,
-                    nullptr,
-                    screen,
-                    x_frame,
-                    y_frame
-                );
-
-                ++drawn_sprites;
-            }
+            GPU_BlitRect(
+                map_image,
+                nullptr,
+                screen,
+                &map_rect
+            );
         }
 
         // Get the position on the map that the click corresponds to, dropping
