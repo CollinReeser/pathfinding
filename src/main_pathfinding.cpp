@@ -56,7 +56,7 @@ void pathfind_gfx(
 
     Frame frame(map, registry);
 
-    frame.draw_frame();
+    // frame.draw_frame();
 
     const SDL_PixelFormat* const pixel_format = SDL_AllocFormat(
         SDL_PIXELFORMAT_ARGB8888
