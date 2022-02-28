@@ -16,6 +16,21 @@ std::pair<uint32_t, uint32_t> get_node_xy(
     const uint32_t i, const uint32_t width
 );
 
+double dist_euclidean(
+    const uint32_t x1, const uint32_t y1,
+    const uint32_t x2, const uint32_t y2
+);
+
+double dist_chebyshev(
+    const uint32_t x1, const uint32_t y1,
+    const uint32_t x2, const uint32_t y2
+);
+
+double dist_manhattan(
+    const uint32_t x1, const uint32_t y1,
+    const uint32_t x2, const uint32_t y2
+);
+
 class Guard {
 private:
     std::function<void()> fn_guard;

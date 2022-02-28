@@ -5,7 +5,7 @@
 
 #include "gtest/gtest.h"
 
-TEST(Util, NodeIndexUnsigned) {
+TEST(Util, NodeIndex) {
     // Width must be >0, and x-coordinate must fit in width.
     EXPECT_DEATH(get_node_index(0u, 0u, 0), "Assertion");
     EXPECT_DEATH(get_node_index(0u, 1u, 0), "Assertion");
@@ -61,6 +61,35 @@ TEST(Util, NodeXY) {
     EXPECT_EQ(get_node_xy(12, 3), std::make_pair(0u, 4u));
     EXPECT_EQ(get_node_xy(13, 3), std::make_pair(1u, 4u));
     EXPECT_EQ(get_node_xy(14, 3), std::make_pair(2u, 4u));
+}
+
+TEST(Util, Dist) {
+    for (uint32_t x_start {0}; x_start < 100; ++x_start) {
+        for (uint32_t y_start {0}; y_start < 100; ++y_start) {
+            for (uint32_t y_end {0}; y_end < 100; ++y_end) {
+                for (uint32_t x_end {0}; x_end < 100; ++x_end) {
+                    if (x_start == x_end && y_start == y_end) {
+                        continue;
+                    }
+
+                    EXPECT_LE(
+                        dist_chebyshev(x_start, y_start, x_end, y_end),
+                        dist_euclidean(x_start, y_start, x_end, y_end)
+                    );
+
+                    EXPECT_LE(
+                        dist_chebyshev(x_start, y_start, x_end, y_end),
+                        dist_manhattan(x_start, y_start, x_end, y_end)
+                    );
+
+                    EXPECT_LE(
+                        dist_euclidean(x_start, y_start, x_end, y_end),
+                        dist_manhattan(x_start, y_start, x_end, y_end)
+                    );
+                }
+            }
+        }
+    }
 }
 
 int main(int argc, char** argv) {

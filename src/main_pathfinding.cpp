@@ -241,6 +241,10 @@ void pathfind_gfx(
         }
     );
 
+    const auto block_lamb = [](const MapNode &node) -> bool {
+        return !node.blocking;
+    };
+
     bool done = false;
     while (!done) {
         uint32_t drawn_sprites {0};
@@ -434,10 +438,6 @@ void pathfind_gfx(
 
                 ++drawn_sprites;
 
-                const auto block_lamb = [](const MapNode &node) -> bool {
-                    return !node.blocking;
-                };
-
                 {
                     Pathfind<Map, decltype(block_lamb)> pathfinder(
                         map,
@@ -497,7 +497,7 @@ void pathfind_gfx(
 
                         ++loops;
 
-                        if (loops > num_pathfinds) {
+                        if (loops >= num_pathfinds) {
                             goto DONE;
                         }
                     }

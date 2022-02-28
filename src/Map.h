@@ -142,17 +142,17 @@ template <typename map_t, typename Predicate>
 class Pathfind {
 private:
     struct ExploredNode {
-        uint32_t idx;
-        uint32_t dist_from_start;
-        uint32_t heur_dist_to_end;
+        const uint32_t idx;
+        const double dist_from_start;
+        const double heur_dist_to_end;
 
-        std::optional<std::reference_wrapper<const ExploredNode>> parent;
+        const std::optional<std::reference_wrapper<const ExploredNode>> parent;
 
         ExploredNode(
             const uint32_t idx,
-            const uint32_t dist_from_start,
-            const uint32_t heur_dist_to_end,
-            std::optional<std::reference_wrapper<const ExploredNode>> parent
+            const double dist_from_start,
+            const double heur_dist_to_end,
+            const std::optional<std::reference_wrapper<const ExploredNode>> parent
         ):
             idx(idx),
             dist_from_start(dist_from_start),
@@ -176,33 +176,74 @@ private:
     const uint32_t y_start;
     const uint32_t x_end;
     const uint32_t y_end;
-    const Predicate &pred_accessible;
+    const Predicate &is_accessible;
 
-    std::unordered_set<uint32_t> explored_nodes;
-    std::vector<ExploredNode> all_explored_nodes;
+    std::vector<ExploredNode> seen_nodes;
+    std::unordered_set<uint32_t> seen_nodes_idx;
 
     std::vector<std::reference_wrapper<const ExploredNode>> to_explore;
 
+    // Push a candidate neighbor node to the queue of nodes to explore next.
+    //
+    // NOTE: The `parent` argument is moved from.
     void push_node(
         const uint32_t idx,
-        const uint32_t dist_from_start,
-        const uint32_t heur_dist_to_end,
-        const std::optional<std::reference_wrapper<const ExploredNode>> parent
+        const std::optional<std::reference_wrapper<const ExploredNode>> &&parent
     ) {
-        const auto [iter, inserted] = explored_nodes.insert(idx);
+        const auto [iter, inserted] = seen_nodes_idx.insert(idx);
 
         if (inserted) {
-            to_explore.emplace_back(
-                all_explored_nodes.emplace_back(
-                    idx, dist_from_start, heur_dist_to_end, parent
-                )
+            const auto [x_new, y_new] {
+                get_node_xy(idx, map.width)
+            };
+
+            const double heur_dist_to_end = dist_chebyshev(
+                x_new, y_new, x_end, y_end
             );
 
-            std::push_heap(
-                to_explore.begin(), to_explore.end(),
-                std::greater<ExploredNode>{}
-            );
+            if (parent) [[likely]] {
+                const ExploredNode &prev = *parent;
+
+                const auto [x_prev, y_prev] {
+                    get_node_xy(prev.idx, map.width)
+                };
+
+                const double dist_between = dist_euclidean(
+                    x_prev, y_prev, x_new, y_new
+                );
+
+                to_explore.emplace_back(
+                    seen_nodes.emplace_back(
+                        idx,
+                        prev.dist_from_start + dist_between,
+                        heur_dist_to_end,
+                        std::move(parent)
+                    )
+                );
+
+                std::push_heap(
+                    to_explore.begin(), to_explore.end(),
+                    std::greater<ExploredNode>{}
+                );
+            }
+            else [[unlikely]] {
+                to_explore.emplace_back(
+                    seen_nodes.emplace_back(
+                        idx,
+                        0,
+                        heur_dist_to_end,
+                        std::nullopt
+                    )
+                );
+
+                std::push_heap(
+                    to_explore.begin(), to_explore.end(),
+                    std::greater<ExploredNode>{}
+                );
+            }
         }
+
+        return;
     }
 
     void pop_node() {
@@ -222,22 +263,7 @@ private:
         return to_explore.at(0);
     }
 
-    uint32_t heuristic_to_end(const uint32_t x, const uint32_t y) const {
-        return (
-            (
-                (x > x_end)
-                    ? x - x_end
-                    : x_end - x
-            ) +
-            (
-                (y > y_end)
-                    ? y - y_end
-                    : y_end - y
-            )
-        );
-    }
-
-    void calc_neighbors() {
+    void gen_neighbors() {
         const ExploredNode &cur_node {get_best_node()};
         pop_node();
 
@@ -275,7 +301,7 @@ private:
                 };
 
                 // First make sure the node is itself non-blocking.
-                if (pred_accessible(map.get_nodes()[idx_neighbor_candidate])) {
+                if (is_accessible(map.get_nodes()[idx_neighbor_candidate])) {
                     // Then make sure that, if this would be a diagonal move, we
                     // disallow it if it would be intersecting with an adjacent
                     // blocking node. That is, if the dots are open and the X's
@@ -329,12 +355,7 @@ private:
                         }
                     }
 
-                    push_node(
-                        idx_neighbor_candidate,
-                        cur_node.dist_from_start + 1,
-                        heuristic_to_end(x_neighbor, y_neighbor),
-                        cur_node
-                    );
+                    push_node(idx_neighbor_candidate, cur_node);
                 }
             }
         }
@@ -349,18 +370,18 @@ public:
         const uint32_t y_start,
         const uint32_t x_end,
         const uint32_t y_end,
-        const Predicate &pred_accessible
+        const Predicate &is_accessible
     ):
         map(map),
         x_start(x_start),
         y_start(y_start),
         x_end(x_end),
         y_end(y_end),
-        pred_accessible(pred_accessible)
+        is_accessible(is_accessible)
     {
         to_explore.reserve(map.width * map.height);
-        explored_nodes.reserve(map.width * map.height);
-        all_explored_nodes.reserve(map.width * map.height);
+        seen_nodes_idx.reserve(map.width * map.height);
+        seen_nodes.reserve(map.width * map.height);
     }
 
     std::vector<std::pair<uint32_t, uint32_t>> get_path() {
@@ -385,9 +406,7 @@ public:
             return {};
         }
 
-        push_node(
-            idx_node_start, 0, heuristic_to_end(x_start, x_end), std::nullopt
-        );
+        push_node(idx_node_start, std::nullopt);
 
         while (to_explore.size() > 0) {
             const ExploredNode &best_node {get_best_node()};
@@ -400,7 +419,7 @@ public:
                 break;
             }
 
-            calc_neighbors();
+            gen_neighbors();
         }
 
         if (to_explore.size() == 0) {
