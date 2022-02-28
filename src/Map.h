@@ -151,6 +151,12 @@ public:
     std::vector<node_t> &get_nodes_mut() {
         return nodes;
     }
+
+    void clear_regions() {
+        for (auto &node : nodes) {
+            node.set_region(std::nullopt);
+        }
+    }
 };
 
 template <typename T, typename U, template <typename, typename> class Derived>
@@ -243,14 +249,19 @@ protected:
                             const uint32_t idx_neigh_adj {
                                 get_node_index(
                                     x_neigh_adj, y_neigh_adj,
-                                    static_cast<Derived<T, U>*>(this)->get_map_width()
+                                    static_cast<Derived<T, U>*>(
+                                        this
+                                    )->get_map_width()
                                 )
                             };
 
                             if (
-                                !static_cast<Derived<T, U>*>(this)->is_accessible(
-                                    static_cast<Derived<T, U>*>(this)->get_map_nodes(
-                                    )[idx_neigh_adj]
+                                !static_cast<Derived<T, U>*>(
+                                    this
+                                )->is_accessible(
+                                    static_cast<Derived<T, U>*>(
+                                        this
+                                    )->get_map_nodes()[idx_neigh_adj]
                                 )
                             ) {
                                 continue;
@@ -263,14 +274,19 @@ protected:
                             const uint32_t idx_neigh_adj {
                                 get_node_index(
                                     x_neigh_adj, y_neigh_adj,
-                                    static_cast<Derived<T, U>*>(this)->get_map_width()
+                                    static_cast<Derived<T, U>*>(
+                                        this
+                                    )->get_map_width()
                                 )
                             };
 
                             if (
-                                !static_cast<Derived<T, U>*>(this)->is_accessible(
-                                    static_cast<Derived<T, U>*>(this)->get_map_nodes(
-                                    )[idx_neigh_adj]
+                                !static_cast<Derived<T, U>*>(
+                                    this
+                                )->is_accessible(
+                                    static_cast<Derived<T, U>*>(
+                                        this
+                                    )->get_map_nodes()[idx_neigh_adj]
                                 )
                             ) {
                                 continue;
@@ -289,14 +305,22 @@ protected:
     }
 };
 
+// Given a start node, "color" (a la graph coloring) the region of nodes
+// accessible from the start node. This will modify the relevant properties of
+// the accessible nodes in the given map.
+//
+// Note that no effort is mmade to detect "mistakes" in a node's region
+// assignment. If it is believed that the map has changed in any way, the region
+// assignment of _all_ nodes should be cleared prior to invoking this class on
+// any start node, as a previously-contiguous region may now be split, and/or a
+// previously-split region may not be contiguous.
 template <typename map_t, typename Predicate>
 class RegionColorer : public MapExplorer<map_t, Predicate, RegionColorer> {
 private:
-    typedef typename map_t::node_t map_node_t;
-
     static inline std::mutex mu;
     static inline uint64_t region_color {0};
 
+    // Returns a guaranteed-unique value every time it is called.
     static uint64_t get_next_region_color() {
         std::scoped_lock<std::mutex> lock(mu);
 
@@ -380,19 +404,30 @@ public:
         seen_nodes_idx.reserve(map.width * map.height);
     }
 
+    // Return the existing region assignment of the start node if it exists, or
+    // perform an accessibility crawl, color the start node and all accessible
+    // nodes with a new unique color, and then return that color as the new
+    // region assignment.
     std::optional<uint64_t> identify_region() {
         const uint32_t idx_node_start {
             get_node_index(x_start, y_start, get_map_width())
         };
 
+        // If the start node is inaccessible (and thus does not have a
+        // meaningful region), then there's nothing to do.
         if (
             !is_accessible(get_map_nodes()[idx_node_start])
         ) {
             return std::nullopt;
         }
+        // If the start node already has an assigned region, then we can just
+        // return that.
         else if (get_map_nodes()[idx_node_start].get_region()) {
             return get_map_nodes()[idx_node_start].get_region();
         }
+
+        // Explore all accessible nodes from the starting node. This tells us
+        // all nodes in this "regionn".
 
         push_node(idx_node_start, std::nullopt);
 
@@ -400,7 +435,10 @@ public:
             this->gen_neighbors();
         }
 
+        // Get a unique color for this new region.
         const uint64_t region_color = get_next_region_color();
+
+        // Inform all nodes in this region of their new region assignment.
 
         auto &map_nodes = map.get_nodes_mut();
 
