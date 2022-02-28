@@ -434,15 +434,16 @@ void pathfind_gfx(
 
                 ++drawn_sprites;
 
-                {
+                const auto block_lamb = [](const MapNode &node) -> bool {
+                    return !node.blocking;
+                };
 
-                    Pathfind<Map, MapNode> pathfinder(
+                {
+                    Pathfind< Map, MapNode, decltype(block_lamb)> pathfinder(
                         map,
                         x_click_map, y_click_map,
                         x_mouse_map, y_mouse_map,
-                        [](const MapNode &node) {
-                            return !node.blocking;
-                        }
+                        block_lamb
                     );
 
                     const auto path {pathfinder.get_path()};
@@ -470,13 +471,11 @@ void pathfind_gfx(
                     std::ranges::reverse_view rv_open_spaces {open_spaces};
 
                     for (const auto &[x_end, y_end] : rv_open_spaces) {
-                        Pathfind<Map, MapNode> pathfinder(
+                        Pathfind<Map, MapNode, decltype(block_lamb)> pathfinder(
                             map,
                             x_start, y_start,
                             x_end, y_end,
-                            [](const MapNode &node) {
-                                return !node.blocking;
-                            }
+                            block_lamb
                         );
 
                         const auto path {pathfinder.get_path()};

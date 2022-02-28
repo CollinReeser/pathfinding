@@ -133,7 +133,7 @@ public:
 // Type map_t must implement member methods with signatures:
 //
 // std::vector<node_t> next_nodes(const node_t &cur)
-template <typename map_t, typename node_t>
+template <typename map_t, typename node_t, typename Predicate>
 class Pathfind {
 private:
     struct ExploredNode {
@@ -171,7 +171,7 @@ private:
     const uint32_t y_start;
     const uint32_t x_end;
     const uint32_t y_end;
-    const std::function<bool(const node_t&)> pred_accessible;
+    const Predicate &pred_accessible;
 
     std::unordered_set<uint32_t> explored_nodes;
     std::vector<ExploredNode> all_explored_nodes;
@@ -270,10 +270,7 @@ private:
                 };
 
                 // First make sure the node is itself non-blocking.
-                if (
-                    !map.get_nodes()[idx_neighbor_candidate].blocking
-                    // pred_accessible(map.get_nodes()[idx_neighbor_candidate])
-                ) {
+                if (pred_accessible(map.get_nodes()[idx_neighbor_candidate])) {
                     // Then make sure that, if this would be a diagonal move, we
                     // disallow it if it would be intersecting with an adjacent
                     // blocking node. That is, if the dots are open and the X's
@@ -347,7 +344,7 @@ public:
         const uint32_t y_start,
         const uint32_t x_end,
         const uint32_t y_end,
-        const std::function<bool(const node_t&)> pred_accessible
+        const Predicate &pred_accessible
     ):
         map(map),
         x_start(x_start),
