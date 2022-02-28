@@ -439,7 +439,7 @@ void pathfind_gfx(
                 };
 
                 {
-                    Pathfind< Map, MapNode, decltype(block_lamb)> pathfinder(
+                    Pathfind<Map, decltype(block_lamb)> pathfinder(
                         map,
                         x_click_map, y_click_map,
                         x_mouse_map, y_mouse_map,
@@ -471,7 +471,7 @@ void pathfind_gfx(
                     std::ranges::reverse_view rv_open_spaces {open_spaces};
 
                     for (const auto &[x_end, y_end] : rv_open_spaces) {
-                        Pathfind<Map, MapNode, decltype(block_lamb)> pathfinder(
+                        Pathfind<Map, decltype(block_lamb)> pathfinder(
                             map,
                             x_start, y_start,
                             x_end, y_end,

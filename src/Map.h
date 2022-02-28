@@ -43,11 +43,14 @@ public:
 };
 
 class Map {
+public:
+    typedef MapNode node_t;
+
 private:
     static inline std::random_device rd;
     static inline std::mt19937 gen {rd()};
 
-    std::vector<MapNode> nodes;
+    std::vector<node_t> nodes;
 
 public:
     // The x-coordinate range.
@@ -122,7 +125,7 @@ public:
         return nodes[get_node_index(x, y, width)].blocking;
     }
 
-    const std::vector<MapNode> &get_nodes() const {
+    const std::vector<node_t> &get_nodes() const {
         return nodes;
     }
 };
@@ -130,10 +133,12 @@ public:
 // node_t represents a single node in the pathfinding graph. These are acquired
 // from interactions with map_t.
 //
+// Type map_t must define typedef node_t.
+//
 // Type map_t must implement member methods with signatures:
 //
-// std::vector<node_t> next_nodes(const node_t &cur)
-template <typename map_t, typename node_t, typename Predicate>
+// std::vector<typename map_t::node_t> next_nodes(const node_t &cur)
+template <typename map_t, typename Predicate>
 class Pathfind {
 private:
     struct ExploredNode {
@@ -363,7 +368,7 @@ public:
             return {};
         }
 
-        const std::vector<node_t> &nodes {map.get_nodes()};
+        const std::vector<typename map_t::node_t> &nodes {map.get_nodes()};
         const uint32_t map_width {map.width};
 
         const uint32_t idx_node_start {
