@@ -495,10 +495,6 @@ public:
     };
 
 private:
-    static inline uint32_t count_push_node {0};
-    static inline uint32_t count_novel_nodes {0};
-    static inline uint32_t path_length {0};
-
     map_t &map;
     const uint32_t x_start;
     const uint32_t y_start;
