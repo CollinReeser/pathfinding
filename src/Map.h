@@ -154,6 +154,16 @@ private:
             heur_dist_to_end(heur_dist_to_end),
             parent(parent)
         {}
+
+        friend bool operator>(
+            const ExploredNode &lhs, const ExploredNode &rhs
+        ){
+            return (
+                lhs.dist_from_start + lhs.heur_dist_to_end
+            ) > (
+                rhs.dist_from_start + rhs.heur_dist_to_end
+            );
+        }
     };
 
     const map_t &map;
@@ -166,7 +176,7 @@ private:
     std::unordered_set<uint32_t> explored_nodes;
     std::vector<ExploredNode> all_explored_nodes;
 
-    std::vector<std::reference_wrapper<const ExploredNode>> explore_next_heap;
+    std::vector<std::reference_wrapper<const ExploredNode>> to_explore;
 
     void push_node(
         const uint32_t idx,
@@ -177,49 +187,34 @@ private:
         const auto [iter, inserted] = explored_nodes.insert(idx);
 
         if (inserted) {
-            explore_next_heap.emplace_back(
+            to_explore.emplace_back(
                 all_explored_nodes.emplace_back(
                     idx, dist_from_start, heur_dist_to_end, parent
                 )
             );
 
-            // TODO: std::ranges::push_heap(...) instead?
             std::push_heap(
-                explore_next_heap.begin(), explore_next_heap.end(),
-                [](
-                    const ExploredNode &a, const ExploredNode &b
-                ) {
-                    return
-                        (a.dist_from_start + a.heur_dist_to_end) >
-                        (b.dist_from_start + b.heur_dist_to_end)
-                        ;
-                }
+                to_explore.begin(), to_explore.end(),
+                std::greater<ExploredNode>{}
             );
         }
     }
 
     void pop_node() {
-        assert(explore_next_heap.size() > 0);
+        assert(to_explore.size() > 0);
 
         std::pop_heap(
-            explore_next_heap.begin(), explore_next_heap.end(),
-            [](
-                const ExploredNode &a, const ExploredNode &b
-            ) {
-                return
-                    (a.dist_from_start + a.heur_dist_to_end) >
-                    (b.dist_from_start + b.heur_dist_to_end)
-                    ;
-            }
+            to_explore.begin(), to_explore.end(),
+            std::greater<ExploredNode>{}
         );
 
-        explore_next_heap.pop_back();
+        to_explore.pop_back();
     }
 
     const ExploredNode &get_best_node() const {
-        assert(explore_next_heap.size() > 0);
+        assert(to_explore.size() > 0);
 
-        return explore_next_heap.at(0);
+        return to_explore.at(0);
     }
 
     uint32_t heuristic_to_end(const uint32_t x, const uint32_t y) const {
@@ -298,7 +293,7 @@ public:
         y_end(y_end),
         pred_accessible(pred_accessible)
     {
-        explore_next_heap.reserve(map.width * map.height);
+        to_explore.reserve(map.width * map.height);
         explored_nodes.reserve(map.width * map.height);
         all_explored_nodes.reserve(map.width * map.height);
     }
@@ -329,7 +324,7 @@ public:
             idx_node_start, 0, heuristic_to_end(x_start, x_end), std::nullopt
         );
 
-        while (explore_next_heap.size() > 0) {
+        while (to_explore.size() > 0) {
             const ExploredNode &best_node {get_best_node()};
 
             const auto &[x_best, y_best] = get_node_xy(
@@ -343,7 +338,7 @@ public:
             calc_neighbors();
         }
 
-        if (explore_next_heap.size() == 0) {
+        if (to_explore.size() == 0) {
             return {};
         }
 
