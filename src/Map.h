@@ -59,7 +59,7 @@ public:
         width(width),
         height(height)
     {
-        gen.seed(1);
+        gen.seed(2);
     }
 
     Map(Map&& o) noexcept:
@@ -241,6 +241,14 @@ private:
         for (int32_t d_y {-1}; d_y <= 1; ++d_y) {
             const int32_t y_neighbor {static_cast<int32_t>(y_node) + d_y};
 
+            // Skip any out-of-bounds Y-coordinates.
+            if (
+                y_neighbor < 0 ||
+                static_cast<uint32_t>(y_neighbor) >= map.height
+            ) {
+                continue;
+            }
+
             for (int32_t d_x {-1}; d_x <= 1; ++d_x) {
                 // Skip the start node.
                 if (d_y == 0 && d_x == 0) {
@@ -249,21 +257,76 @@ private:
 
                 const int32_t x_neighbor {static_cast<int32_t>(x_node) + d_x};
 
-                // BOG: We really do need to check the value of x, y to make
-                // sure they're not going out of bounds, since this can still
-                // yield nonsensicle coordinates.
-                const int32_t idx_neighbor_candidate {
-                    get_node_index<int32_t>(x_neighbor, y_neighbor, map.width)
+                // Skip any out-of-bounds X-coordinates.
+                if (
+                    x_neighbor < 0 ||
+                    static_cast<uint32_t>(x_neighbor) >= map.width
+                ) {
+                    continue;
+                }
+
+                const uint32_t idx_neighbor_candidate {
+                    get_node_index(x_neighbor, y_neighbor, map.width)
                 };
 
+                // First make sure the node is itself non-blocking.
                 if (
-                    idx_neighbor_candidate >= 0 &&
-                    static_cast<uint32_t>(
-                        idx_neighbor_candidate
-                    ) < map.get_nodes().size() &&
                     !map.get_nodes()[idx_neighbor_candidate].blocking
                     // pred_accessible(map.get_nodes()[idx_neighbor_candidate])
                 ) {
+                    // Then make sure that, if this would be a diagonal move, we
+                    // disallow it if it would be intersecting with an adjacent
+                    // blocking node. That is, if the dots are open and the X's
+                    // are blocking nodes, then the center node can only validly
+                    // move straight down; the other corners are "blocked" by
+                    // the adjacent obstacles:
+                    //
+                    // . X .
+                    // X . X
+                    // . . .
+                    //
+
+                    if (
+                        (d_x == -1 && d_y == -1) ||
+                        (d_x == -1 && d_y ==  1) ||
+                        (d_x ==  1 && d_y ==  1) ||
+                        (d_x ==  1 && d_y == -1)
+                    ) {
+                        // NOTE: Since we know that the middle node is valid
+                        // (since we're expanding it now), and since we know
+                        // that this d_x/d_y combination is valid (since we got
+                        // past the checks above), then we know that these
+                        // adjacent nodes are also guaranteed-accessible.
+                        {
+                            const uint32_t x_neigh_adj {x_node + d_x};
+                            const uint32_t y_neigh_adj {y_node};
+
+                            const uint32_t idx_neigh_adj {
+                                get_node_index(
+                                    x_neigh_adj, y_neigh_adj, map.width
+                                )
+                            };
+
+                            if (map.get_nodes()[idx_neigh_adj].blocking) {
+                                continue;
+                            }
+                        }
+                        {
+                            const uint32_t x_neigh_adj {x_node};
+                            const uint32_t y_neigh_adj {y_node + d_y};
+
+                            const uint32_t idx_neigh_adj {
+                                get_node_index(
+                                    x_neigh_adj, y_neigh_adj, map.width
+                                )
+                            };
+
+                            if (map.get_nodes()[idx_neigh_adj].blocking) {
+                                continue;
+                            }
+                        }
+                    }
+
                     push_node(
                         idx_neighbor_candidate,
                         cur_node.dist_from_start + 1,
