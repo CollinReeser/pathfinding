@@ -28,20 +28,35 @@ struct MapNode {
 public:
     const uint32_t x_coord;
     const uint32_t y_coord;
-    const bool blocking;
+
+private:
+    bool blocking;
     std::optional<uint64_t> region;
 
+public:
     MapNode(
         const uint32_t x_coord,
         const uint32_t y_coord,
         const bool blocking,
-        std::optional<uint64_t> region = std::nullopt
+        const std::optional<uint64_t> region = std::nullopt
     ):
         x_coord(x_coord),
         y_coord(y_coord),
         blocking(blocking),
         region(region)
     {}
+
+    bool get_blocking() const {
+        return blocking;
+    }
+
+    const std::optional<uint64_t> &get_region() const {
+        return region;
+    }
+
+    void set_region(std::optional<uint64_t> &&region_new) {
+        region = std::move(region_new);
+    }
 
     friend Map;
 };
@@ -69,10 +84,10 @@ public:
         gen.seed(2);
     }
 
-    Map(Map&& o) noexcept:
-        nodes(std::move(o.nodes)),
-        width(o.width),
-        height(o.height)
+    Map(Map &&other) noexcept:
+        nodes(std::move(other.nodes)),
+        width(other.width),
+        height(other.height)
     {}
 
     static Map gen_rand_map(
@@ -97,7 +112,7 @@ public:
         for (uint32_t y = 0; y < height; ++y) {
             for (uint32_t x = 0; x < width; ++x) {
                 const uint32_t i {get_node_index(x, y, width)};
-                if (nodes[i].blocking) {
+                if (nodes[i].get_blocking()) {
                     tiles[i] = 'X';
                 }
                 else {
@@ -120,13 +135,13 @@ public:
             y = rng_h(Map::gen);
 
             i = get_node_index(x, y, width);
-        } while (!nodes[i].blocking);
+        } while (!nodes[i].get_blocking());
 
         return {x, y};
     }
 
     bool is_blocking(const uint32_t x, const uint32_t y) const {
-        return nodes[get_node_index(x, y, width)].blocking;
+        return nodes[get_node_index(x, y, width)].get_blocking();
     }
 
     const std::vector<node_t> &get_nodes() const {
@@ -277,6 +292,8 @@ protected:
 template <typename map_t, typename Predicate>
 class RegionColorer : public MapExplorer<map_t, Predicate, RegionColorer> {
 private:
+    typedef typename map_t::node_t map_node_t;
+
     static inline std::mutex mu;
     static inline uint64_t region_color {0};
 
@@ -373,8 +390,8 @@ public:
         ) {
             return std::nullopt;
         }
-        else if (get_map_nodes()[idx_node_start].region) {
-            return get_map_nodes()[idx_node_start].region;
+        else if (get_map_nodes()[idx_node_start].get_region()) {
+            return get_map_nodes()[idx_node_start].get_region();
         }
 
         push_node(idx_node_start, std::nullopt);
@@ -388,7 +405,7 @@ public:
         auto &map_nodes = map.get_nodes_mut();
 
         for (const auto &node : seen_nodes) {
-            map_nodes[node.idx].region = region_color;
+            map_nodes[node.idx].set_region(region_color);
         }
 
         return region_color;
@@ -701,8 +718,8 @@ public:
         std::optional<uint64_t> region_start;
         std::optional<uint64_t> region_end;
 
-        if (map.get_nodes()[idx_node_start].region) {
-            region_start = map.get_nodes()[idx_node_start].region;
+        if (map.get_nodes()[idx_node_start].get_region()) {
+            region_start = map.get_nodes()[idx_node_start].get_region();
         }
         else {
             RegionColorer<map_t, Predicate> region_colorer(
@@ -712,8 +729,8 @@ public:
             region_start = region_colorer.identify_region();
         }
 
-        if (map.get_nodes()[idx_node_end].region) {
-            region_end = map.get_nodes()[idx_node_end].region;
+        if (map.get_nodes()[idx_node_end].get_region()) {
+            region_end = map.get_nodes()[idx_node_end].get_region();
         }
         else {
             RegionColorer<map_t, Predicate> region_colorer(

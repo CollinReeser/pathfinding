@@ -163,7 +163,7 @@ void pathfind_gfx(
     std::vector<std::pair<uint32_t, uint32_t>> open_spaces;
 
     for (const auto &node : map.get_nodes()) {
-        if (!node.blocking) {
+        if (!node.get_blocking()) {
             open_spaces.emplace_back(node.x_coord, node.y_coord);
         }
     }
@@ -242,7 +242,7 @@ void pathfind_gfx(
     );
 
     const auto block_lamb = [](const MapNode &node) -> bool {
-        return !node.blocking;
+        return !node.get_blocking();
     };
 
     bool done = false;
@@ -350,7 +350,7 @@ void pathfind_gfx(
                 const uint32_t x_frame {x_node * sprite_width};
                 const uint32_t y_frame {y_node * sprite_height};
 
-                if (node.blocking) {
+                if (node.get_blocking()) {
                     GPU_Blit(
                         texture_obstacle,
                         nullptr,
@@ -370,7 +370,7 @@ void pathfind_gfx(
                 const uint32_t x_frame {x_node * sprite_width};
                 const uint32_t y_frame {y_node * sprite_height};
 
-                if (!node.blocking) {
+                if (!node.get_blocking()) {
                     GPU_Blit(
                         texture_open,
                         nullptr,
