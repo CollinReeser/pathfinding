@@ -316,17 +316,6 @@ protected:
 // previously-split region may not be contiguous.
 template <typename map_t, typename Predicate>
 class RegionColorer : public MapExplorer<map_t, Predicate, RegionColorer> {
-private:
-    static inline std::mutex mu;
-    static inline uint64_t region_color {0};
-
-    // Returns a guaranteed-unique value every time it is called.
-    static uint64_t get_next_region_color() {
-        std::scoped_lock<std::mutex> lock(mu);
-
-        return region_color++;
-    }
-
 public:
     struct ExploredNode {
         const uint32_t idx;
@@ -338,16 +327,28 @@ public:
         {}
     };
 
+private:
+    static inline std::mutex mu;
+    static inline uint64_t region_color {0};
+
+    // Returns a guaranteed-unique value every time it is called.
+    static uint64_t get_next_region_color() {
+        std::scoped_lock<std::mutex> lock(mu);
+
+        return region_color++;
+    }
+
     map_t &map;
     const uint32_t x_start;
     const uint32_t y_start;
-
-    const Predicate &is_accessible;
 
     uint32_t idx_unexplored {0};
 
     std::vector<ExploredNode> seen_nodes;
     std::unordered_set<uint32_t> seen_nodes_idx;
+
+public:
+    const Predicate &is_accessible;
 
     void push_node(
         const uint32_t idx,
@@ -459,8 +460,8 @@ public:
 //
 // std::vector<typename map_t::node_t> next_nodes(const node_t &cur)
 template <typename map_t, typename Predicate>
-class Pathfind {
-private:
+class Pathfind : public MapExplorer<map_t, Predicate, Pathfind> {
+public:
     struct ExploredNode {
         const uint32_t idx;
         const double dist_from_start;
@@ -493,6 +494,7 @@ private:
         }
     };
 
+private:
     static inline uint32_t count_push_node {0};
     static inline uint32_t count_novel_nodes {0};
     static inline uint32_t path_length {0};
@@ -502,12 +504,14 @@ private:
     const uint32_t y_start;
     const uint32_t x_end;
     const uint32_t y_end;
-    const Predicate &is_accessible;
 
     std::vector<ExploredNode> seen_nodes;
     std::unordered_set<uint32_t> seen_nodes_idx;
 
     std::vector<std::reference_wrapper<const ExploredNode>> to_explore;
+
+public:
+    const Predicate &is_accessible;
 
     // Push a candidate neighbor node to the queue of nodes to explore next.
     //
@@ -601,111 +605,6 @@ private:
         return map.height;
     }
 
-    void gen_neighbors() {
-        const ExploredNode &cur_node {get_next_node()};
-        pop_node();
-
-        const auto [x_node, y_node] = get_node_xy(
-            cur_node.idx, get_map_width()
-        );
-
-        for (int32_t d_y {-1}; d_y <= 1; ++d_y) {
-            const int32_t y_neighbor {static_cast<int32_t>(y_node) + d_y};
-
-            // Skip any out-of-bounds Y-coordinates.
-            if (
-                y_neighbor < 0 ||
-                static_cast<uint32_t>(y_neighbor) >= get_map_height()
-            ) {
-                continue;
-            }
-
-            for (int32_t d_x {-1}; d_x <= 1; ++d_x) {
-                // Skip the start node.
-                if (d_y == 0 && d_x == 0) {
-                    continue;
-                }
-
-                const int32_t x_neighbor {static_cast<int32_t>(x_node) + d_x};
-
-                // Skip any out-of-bounds X-coordinates.
-                if (
-                    x_neighbor < 0 ||
-                    static_cast<uint32_t>(x_neighbor) >= get_map_width()
-                ) {
-                    continue;
-                }
-
-                const uint32_t idx_neighbor_candidate {
-                    get_node_index(x_neighbor, y_neighbor, get_map_width())
-                };
-
-                // First make sure the node is itself non-blocking.
-                if (is_accessible(get_map_nodes()[idx_neighbor_candidate])) {
-                    // Then make sure that, if this would be a diagonal move, we
-                    // disallow it if it would be intersecting with an adjacent
-                    // blocking node. That is, if the dots are open and the X's
-                    // are blocking nodes, then the center node can only validly
-                    // move straight down; the other corners are "blocked" by
-                    // the adjacent obstacles:
-                    //
-                    // . X .
-                    // X . X
-                    // . . .
-                    //
-
-                    if (
-                        (d_x == -1 && d_y == -1) ||
-                        (d_x == -1 && d_y ==  1) ||
-                        (d_x ==  1 && d_y ==  1) ||
-                        (d_x ==  1 && d_y == -1)
-                    ) {
-                        // NOTE: Since we know that the middle node is valid
-                        // (since we're expanding it now), and since we know
-                        // that this d_x/d_y combination is valid (since we got
-                        // past the checks above), then we know that these
-                        // adjacent nodes are also guaranteed-accessible.
-                        {
-                            const uint32_t x_neigh_adj {x_node + d_x};
-                            const uint32_t y_neigh_adj {y_node};
-
-                            const uint32_t idx_neigh_adj {
-                                get_node_index(
-                                    x_neigh_adj, y_neigh_adj, get_map_width()
-                                )
-                            };
-
-                            if (
-                                !is_accessible(get_map_nodes()[idx_neigh_adj])
-                            ) {
-                                continue;
-                            }
-                        }
-                        {
-                            const uint32_t x_neigh_adj {x_node};
-                            const uint32_t y_neigh_adj {y_node + d_y};
-
-                            const uint32_t idx_neigh_adj {
-                                get_node_index(
-                                    x_neigh_adj, y_neigh_adj, get_map_width()
-                                )
-                            };
-
-                            if (
-                                !is_accessible(get_map_nodes()[idx_neigh_adj])
-                            ) {
-                                continue;
-                            }
-                        }
-                    }
-
-                    push_node(idx_neighbor_candidate, cur_node);
-                }
-            }
-        }
-
-        return;
-    }
 
 public:
     Pathfind(
@@ -797,7 +696,7 @@ public:
                 break;
             }
 
-            gen_neighbors();
+            this->gen_neighbors();
         }
 
         if (to_explore.size() == 0) {
