@@ -71,6 +71,12 @@ void pathfind_gfx(
     unsigned char pix_path[
         sprite_width * sprite_height * pixel_format->BytesPerPixel
     ];
+    unsigned char pix_explore[
+        sprite_width * sprite_height * pixel_format->BytesPerPixel
+    ];
+    unsigned char pix_road[
+        sprite_width * sprite_height * pixel_format->BytesPerPixel
+    ];
 
     for (uint32_t y = 0; y < sprite_height; y++) {
         for (uint32_t x = 0; x < sprite_width; x++) {
@@ -107,6 +113,32 @@ void pathfind_gfx(
                 0 /*= red*/,
                 255 /*= green*/,
                 0 /*= blue*/,
+                255 /*= alpha */
+            );
+        }
+    }
+    for (uint32_t y = 0; y < sprite_height; y++) {
+        for (uint32_t x = 0; x < sprite_width; x++) {
+            reinterpret_cast<uint32_t*>(pix_explore)[
+                get_node_index(x, y, sprite_width)
+            ] = SDL_MapRGBA(
+                pixel_format,
+                0 /*= red*/,
+                0 /*= green*/,
+                255 /*= blue*/,
+                255 /*= alpha */
+            );
+        }
+    }
+    for (uint32_t y = 0; y < sprite_height; y++) {
+        for (uint32_t x = 0; x < sprite_width; x++) {
+            reinterpret_cast<uint32_t*>(pix_road)[
+                get_node_index(x, y, sprite_width)
+            ] = SDL_MapRGBA(
+                pixel_format,
+                128 /*= red*/,
+                79 /*= green*/,
+                79 /*= blue*/,
                 255 /*= alpha */
             );
         }
@@ -148,15 +180,43 @@ void pathfind_gfx(
         0
     );
 
+    SDL2pp::Surface sprite_explore(
+        pix_explore,
+        sprite_width,
+        sprite_height,
+        pixel_format->BitsPerPixel,
+        pixel_format->BytesPerPixel * sprite_width,
+        0,
+        0,
+        0,
+        0
+    );
+
+    SDL2pp::Surface sprite_road(
+        pix_road,
+        sprite_width,
+        sprite_height,
+        pixel_format->BitsPerPixel,
+        pixel_format->BytesPerPixel * sprite_width,
+        0,
+        0,
+        0,
+        0
+    );
+
     GPU_Image* texture_obstacle = GPU_CopyImageFromSurface(sprite_obstacle.Get());
     GPU_Image* texture_open = GPU_CopyImageFromSurface(sprite_open.Get());
     GPU_Image* texture_path = GPU_CopyImageFromSurface(sprite_path.Get());
+    GPU_Image* texture_explore = GPU_CopyImageFromSurface(sprite_explore.Get());
+    GPU_Image* texture_road = GPU_CopyImageFromSurface(sprite_road.Get());
 
     auto free_guard = Guard(
         [=]() {
             GPU_FreeImage(texture_obstacle);
             GPU_FreeImage(texture_open);
             GPU_FreeImage(texture_path);
+            GPU_FreeImage(texture_explore);
+            GPU_FreeImage(texture_road);
         }
     );
 
@@ -383,6 +443,26 @@ void pathfind_gfx(
                 }
             }
 
+            for (const auto &node : map.get_nodes()) {
+                const uint32_t x_node {node.x_coord};
+                const uint32_t y_node {node.y_coord};
+
+                const uint32_t x_frame {x_node * sprite_width};
+                const uint32_t y_frame {y_node * sprite_height};
+
+                if (node.get_weight() < 1) {
+                    GPU_Blit(
+                        texture_road,
+                        nullptr,
+                        screen,
+                        x_frame,
+                        y_frame
+                    );
+
+                    ++drawn_sprites;
+                }
+            }
+
             map_image = GPU_CopyImageFromTarget(screen);
         }
         else {
@@ -438,6 +518,10 @@ void pathfind_gfx(
 
                 ++drawn_sprites;
 
+                dur_pathfinding = std::chrono::microseconds(0);
+
+                start_pathfinding = std::chrono::steady_clock::now();
+
                 {
                     Pathfind<Map, decltype(block_lamb)> pathfinder(
                         map,
@@ -447,6 +531,34 @@ void pathfind_gfx(
                     );
 
                     const auto path {pathfinder.get_path()};
+
+                    end_pathfinding = std::chrono::steady_clock::now();
+
+                    dur_pathfinding +=
+                        std::chrono::duration_cast<std::chrono::microseconds>(
+                            end_pathfinding - start_pathfinding
+                        );
+
+                    if (path.size()) {
+                        for (
+                            const auto explored_idx : Pathfind<Map, decltype(block_lamb)>::static_seen_nodes_idx
+                        ) {
+                            const auto [x_explore_map, y_explore_map] = get_node_xy(explored_idx, map.width);
+
+                            const uint32_t x_explore = x_explore_map * sprite_width;
+                            const uint32_t y_explore = y_explore_map * sprite_height;
+
+                            GPU_Blit(
+                                texture_explore,
+                                nullptr,
+                                screen,
+                                x_explore,
+                                y_explore
+                            );
+
+                            ++drawn_sprites;
+                        }
+                    }
 
                     for (const auto &[x_path_map, y_path_map] : path) {
                         const uint32_t x_path = x_path_map * sprite_width;
@@ -464,8 +576,6 @@ void pathfind_gfx(
                     }
                 }
 
-                start_pathfinding = std::chrono::steady_clock::now();
-
                 uint32_t loops {0};
                 for (const auto &[x_start, y_start] : open_spaces) {
                     std::ranges::reverse_view rv_open_spaces {open_spaces};
@@ -478,7 +588,35 @@ void pathfind_gfx(
                             block_lamb
                         );
 
+                        start_pathfinding = std::chrono::steady_clock::now();
+
                         const auto path {pathfinder.get_path()};
+
+                        end_pathfinding = std::chrono::steady_clock::now();
+
+                         dur_pathfinding +=
+                             std::chrono::duration_cast<std::chrono::microseconds>(
+                                 end_pathfinding - start_pathfinding
+                             );
+
+                        for (
+                            const auto explored_idx : Pathfind<Map, decltype(block_lamb)>::static_seen_nodes_idx
+                        ) {
+                            const auto [x_explore_map, y_explore_map] = get_node_xy(explored_idx, map.width);
+
+                            const uint32_t x_explore = x_explore_map * sprite_width;
+                            const uint32_t y_explore = y_explore_map * sprite_height;
+
+                            GPU_Blit(
+                                texture_explore,
+                                nullptr,
+                                screen,
+                                x_explore,
+                                y_explore
+                            );
+
+                            ++drawn_sprites;
+                        }
 
                         for (const auto &[x_path_map, y_path_map] : path) {
                             const uint32_t x_path = x_path_map * sprite_width;
@@ -505,13 +643,6 @@ void pathfind_gfx(
 
                 DONE:
                 ;
-
-                end_pathfinding = std::chrono::steady_clock::now();
-
-                dur_pathfinding =
-                    std::chrono::duration_cast<std::chrono::microseconds>(
-                        end_pathfinding - start_pathfinding
-                    );
             }
         }
 
@@ -573,7 +704,7 @@ void pathfind_gfx(
         );
 
         font.drawColumn(
-            screen, 600, font.getHeight() * 10, 400,
+            screen, 0, font.getHeight() * 20, 400,
             "The quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog, the quick brown fox jumps over the lazy dog..."
         );
 
@@ -605,6 +736,8 @@ void pathfind_gfx(
 
         start_frame = std::chrono::steady_clock::now();
     }
+
+    Pathfind<Map, decltype(block_lamb)>::print_perf();
 
     return;
 }

@@ -26,28 +26,45 @@ class Map;
 
 struct MapNode {
 public:
+    static inline const float DEFAULT_WEIGHT {1.3};
+
     const uint32_t x_coord;
     const uint32_t y_coord;
 
 private:
     bool blocking;
     std::optional<uint64_t> region;
+    float weight;
 
 public:
     MapNode(
         const uint32_t x_coord,
         const uint32_t y_coord,
         const bool blocking,
-        const std::optional<uint64_t> region = std::nullopt
+        const std::optional<uint64_t> region = std::nullopt,
+        const float weight = DEFAULT_WEIGHT
     ):
         x_coord(x_coord),
         y_coord(y_coord),
         blocking(blocking),
-        region(region)
+        region(region),
+        weight(weight)
     {}
 
     bool get_blocking() const {
         return blocking;
+    }
+
+    void set_blocking(const bool blocking_new) {
+        blocking = blocking_new;
+    }
+
+    float get_weight() const {
+        return weight;
+    }
+
+    void set_weight(const float weight_new) {
+        weight = weight_new;
     }
 
     const std::optional<uint64_t> &get_region() const {
@@ -94,6 +111,8 @@ public:
         const uint32_t width = 64, const uint32_t height = 32
     ) {
         std::uniform_int_distribution<> rng(0, 5);
+        std::uniform_int_distribution<> rng_width(0, width);
+        std::uniform_int_distribution<> rng_height(0, height);
 
         Map map(width, height);
 
@@ -103,6 +122,47 @@ public:
             const auto [x, y] = get_node_xy(i, map.width);
 
             map.nodes.emplace_back(x, y, rng(Map::gen) > 3);
+        }
+
+        for (uint32_t i = 0; i < 10; ++i) {
+            uint32_t x_road = rng_width(Map::gen);
+            uint32_t x_extend = rng_width(Map::gen);
+
+            if (x_road > x_extend) {
+                std::swap(x_road, x_extend);
+            }
+
+            uint32_t y_road = rng_height(Map::gen);
+            uint32_t y_extend = rng_height(Map::gen);
+
+            if (y_road > y_extend) {
+                std::swap(y_road, y_extend);
+            }
+
+            for (uint32_t i_x = x_road; i_x <= x_extend; ++i_x) {
+                const auto idx = get_node_index(i_x, y_road, map.width);
+
+                map.nodes[idx].set_weight(0.7);
+                map.nodes[idx].set_blocking(false);
+            }
+            for (uint32_t i_y = y_road; i_y <= y_extend; ++i_y) {
+                const auto idx = get_node_index(x_road, i_y, map.width);
+
+                map.nodes[idx].set_weight(0.7);
+                map.nodes[idx].set_blocking(false);
+            }
+            for (uint32_t i_x = x_road; i_x <= x_extend; ++i_x) {
+                const auto idx = get_node_index(i_x, y_extend, map.width);
+
+                map.nodes[idx].set_weight(0.7);
+                map.nodes[idx].set_blocking(false);
+            }
+            for (uint32_t i_y = y_road; i_y <= y_extend; ++i_y) {
+                const auto idx = get_node_index(x_extend, i_y, map.width);
+
+                map.nodes[idx].set_weight(0.7);
+                map.nodes[idx].set_blocking(false);
+            }
         }
 
         return map;
@@ -163,14 +223,16 @@ template <typename T, typename U, template <typename, typename> class Derived>
 class MapExplorer {
 protected:
     void gen_neighbors() {
+        auto deriv_ptr {static_cast<Derived<T, U>*>(this)};
+
         const typename Derived<T, U>::ExploredNode &cur_node {
-            static_cast<Derived<T, U>*>(this)->get_next_node()
+            deriv_ptr->get_next_node()
         };
 
-        static_cast<Derived<T, U>*>(this)->pop_node();
+        deriv_ptr->pop_node();
 
         const auto [x_node, y_node] = get_node_xy(
-            cur_node.idx, static_cast<Derived<T, U>*>(this)->get_map_width()
+            cur_node.idx, deriv_ptr->get_map_width()
         );
 
         for (int32_t d_y {-1}; d_y <= 1; ++d_y) {
@@ -181,7 +243,7 @@ protected:
                 y_neighbor < 0 ||
                 static_cast<uint32_t>(
                     y_neighbor
-                ) >= static_cast<Derived<T, U>*>(this)->get_map_height()
+                ) >= deriv_ptr->get_map_height()
             ) {
                 continue;
             }
@@ -199,7 +261,7 @@ protected:
                     x_neighbor < 0 ||
                     static_cast<uint32_t>(
                         x_neighbor
-                    ) >= static_cast<Derived<T, U>*>(this)->get_map_width()
+                    ) >= deriv_ptr->get_map_width()
                 ) {
                     continue;
                 }
@@ -207,16 +269,14 @@ protected:
                 const uint32_t idx_neighbor_candidate {
                     get_node_index(
                         x_neighbor, y_neighbor,
-                        static_cast<Derived<T, U>*>(this)->get_map_width()
+                        deriv_ptr->get_map_width()
                     )
                 };
 
                 // First make sure the node is itself non-blocking.
                 if (
-                    static_cast<Derived<T, U>*>(this)->is_accessible(
-                        static_cast<Derived<T, U>*>(this)->get_map_nodes()[
-                            idx_neighbor_candidate
-                        ]
+                    deriv_ptr->is_accessible(
+                        deriv_ptr->get_map_nodes()[idx_neighbor_candidate]
                     )
                 ) {
                     // Then make sure that, if this would be a diagonal move, we
@@ -249,19 +309,13 @@ protected:
                             const uint32_t idx_neigh_adj {
                                 get_node_index(
                                     x_neigh_adj, y_neigh_adj,
-                                    static_cast<Derived<T, U>*>(
-                                        this
-                                    )->get_map_width()
+                                    deriv_ptr->get_map_width()
                                 )
                             };
 
                             if (
-                                !static_cast<Derived<T, U>*>(
-                                    this
-                                )->is_accessible(
-                                    static_cast<Derived<T, U>*>(
-                                        this
-                                    )->get_map_nodes()[idx_neigh_adj]
+                                !deriv_ptr->is_accessible(
+                                    deriv_ptr->get_map_nodes()[idx_neigh_adj]
                                 )
                             ) {
                                 continue;
@@ -274,19 +328,13 @@ protected:
                             const uint32_t idx_neigh_adj {
                                 get_node_index(
                                     x_neigh_adj, y_neigh_adj,
-                                    static_cast<Derived<T, U>*>(
-                                        this
-                                    )->get_map_width()
+                                    deriv_ptr->get_map_width()
                                 )
                             };
 
                             if (
-                                !static_cast<Derived<T, U>*>(
-                                    this
-                                )->is_accessible(
-                                    static_cast<Derived<T, U>*>(
-                                        this
-                                    )->get_map_nodes()[idx_neigh_adj]
+                                !deriv_ptr->is_accessible(
+                                    deriv_ptr->get_map_nodes()[idx_neigh_adj]
                                 )
                             ) {
                                 continue;
@@ -294,9 +342,7 @@ protected:
                         }
                     }
 
-                    static_cast<Derived<T, U>*>(this)->push_node(
-                        idx_neighbor_candidate, cur_node
-                    );
+                    deriv_ptr->push_node(idx_neighbor_candidate, cur_node);
                 }
             }
         }
@@ -410,6 +456,8 @@ public:
     // nodes with a new unique color, and then return that color as the new
     // region assignment.
     std::optional<uint64_t> identify_region() {
+        auto start_ident = std::chrono::steady_clock::now();
+
         const uint32_t idx_node_start {
             get_node_index(x_start, y_start, get_map_width())
         };
@@ -446,6 +494,15 @@ public:
         for (const auto &node : seen_nodes) {
             map_nodes[node.idx].set_region(region_color);
         }
+
+        auto end_ident = std::chrono::steady_clock::now();
+        auto dur = std::chrono::duration_cast<std::chrono::microseconds>(
+            end_ident - start_ident
+        );
+
+        std::cout
+            << "Identified region [" << region_color << "] at ["
+            << x_start << ", " << y_start << "]: [" << dur.count() << "] us" << std::endl;
 
         return region_color;
     }
@@ -485,7 +542,7 @@ public:
 
         friend bool operator>(
             const ExploredNode &lhs, const ExploredNode &rhs
-        ){
+        ) {
             return (
                 lhs.dist_from_start + lhs.heur_dist_to_end
             ) > (
@@ -495,6 +552,10 @@ public:
     };
 
 private:
+    static inline uint32_t count_push_node {0};
+    static inline uint32_t count_novel_nodes {0};
+    static inline uint32_t path_length {0};
+
     map_t &map;
     const uint32_t x_start;
     const uint32_t y_start;
@@ -507,6 +568,8 @@ private:
     std::vector<std::reference_wrapper<const ExploredNode>> to_explore;
 
 public:
+    static inline std::unordered_set<uint32_t> static_seen_nodes_idx;
+
     const Predicate &is_accessible;
 
     // Push a candidate neighbor node to the queue of nodes to explore next.
@@ -516,14 +579,25 @@ public:
         const uint32_t idx,
         const std::optional<std::reference_wrapper<const ExploredNode>> &&parent
     ) {
+        ++count_push_node;
+
         const auto [iter, inserted] = seen_nodes_idx.insert(idx);
 
         if (inserted) {
+            ++count_novel_nodes;
+
             const auto [x_new, y_new] {
                 get_node_xy(idx, map.width)
             };
 
-            const double heur_dist_to_end = dist_chebyshev(
+            // The Euclidean distance to the end will be equal to or greater
+            // than the Chebyshev distance to the end, meaning we are
+            // overestimating our heuristic. In practice, this reduces the
+            // optimality of the path by only a small amount, but greatly
+            // reduces the number of nodes explored, achieving much better
+            // performance for only a small optimality penalty over long
+            // distances.
+            const double heur_dist_to_end = dist_euclidean(
                 x_new, y_new, x_end, y_end
             );
 
@@ -534,22 +608,19 @@ public:
                     get_node_xy(prev.idx, map.width)
                 };
 
-                const double dist_between = dist_euclidean(
+                const double dist_prev_to_new = dist_chebyshev(
                     x_prev, y_prev, x_new, y_new
                 );
+
+                const double weight {get_map_nodes()[idx].get_weight()};
 
                 to_explore.emplace_back(
                     seen_nodes.emplace_back(
                         idx,
-                        prev.dist_from_start + dist_between,
-                        heur_dist_to_end,
+                        prev.dist_from_start + (dist_prev_to_new * weight),
+                        heur_dist_to_end * weight,
                         std::move(parent)
                     )
-                );
-
-                std::push_heap(
-                    to_explore.begin(), to_explore.end(),
-                    std::greater<ExploredNode>{}
                 );
             }
             else [[unlikely]] {
@@ -561,12 +632,12 @@ public:
                         std::nullopt
                     )
                 );
-
-                std::push_heap(
-                    to_explore.begin(), to_explore.end(),
-                    std::greater<ExploredNode>{}
-                );
             }
+
+            std::push_heap(
+                to_explore.begin(), to_explore.end(),
+                std::greater<ExploredNode>{}
+            );
         }
 
         return;
@@ -624,6 +695,9 @@ public:
     }
 
     std::vector<std::pair<uint32_t, uint32_t>> get_path() {
+        count_novel_nodes = 0;
+        count_push_node = 0;
+
         if (x_start == x_end && y_start == y_end) {
             return {};
         }
@@ -715,7 +789,23 @@ public:
             path_node = path_node->get().parent;
         }
 
+        path_length = path.size();
+
+        {
+            static_seen_nodes_idx = std::unordered_set<uint32_t>(
+                seen_nodes_idx.begin(), seen_nodes_idx.end()
+            );
+        }
+
         return path;
+    }
+
+    static void print_perf() {
+        std::cout << "count_push_node  : " << count_push_node << std::endl;
+        std::cout << "count_novel_nodes: " << count_novel_nodes << std::endl;
+        std::cout << "path_length      : " << path_length << std::endl;
+
+        return;
     }
 };
 
