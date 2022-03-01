@@ -381,7 +381,7 @@ private:
     static uint64_t get_next_region_color() {
         std::scoped_lock<std::mutex> lock(mu);
 
-        return region_color++;
+        return ++region_color;
     }
 
     map_t &map;
@@ -394,7 +394,14 @@ private:
     std::unordered_set<uint32_t> seen_nodes_idx;
 
 public:
+    static uint64_t get_cur_region_color() {
+        std::scoped_lock<std::mutex> lock(mu);
+
+        return region_color;
+    }
+
     const Predicate &is_accessible;
+
 
     void push_node(
         const uint32_t idx,

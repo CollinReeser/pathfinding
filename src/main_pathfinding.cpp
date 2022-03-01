@@ -77,6 +77,9 @@ void pathfind_gfx(
     unsigned char pix_road[
         sprite_width * sprite_height * pixel_format->BytesPerPixel
     ];
+    unsigned char pix_region[
+        sprite_width * sprite_height * pixel_format->BytesPerPixel
+    ];
 
     for (uint32_t y = 0; y < sprite_height; y++) {
         for (uint32_t x = 0; x < sprite_width; x++) {
@@ -143,6 +146,21 @@ void pathfind_gfx(
             );
         }
     }
+    for (uint32_t y = 0; y < sprite_height; y++) {
+        for (uint32_t x = 0; x < sprite_width; x++) {
+            // Start with "beige-ish", and we'll modulate the color live, based
+            // on the region value of the open tile we're painting.
+            reinterpret_cast<uint32_t*>(pix_region)[
+                get_node_index(x, y, sprite_width)
+            ] = SDL_MapRGBA(
+                pixel_format,
+                200 /*= red*/,
+                200 /*= green*/,
+                200 /*= blue*/,
+                255 /*= alpha */
+            );
+        }
+    }
 
     SDL2pp::Surface sprite_obstacle(
         pix_obstacle,
@@ -204,11 +222,31 @@ void pathfind_gfx(
         0
     );
 
+    SDL2pp::Surface sprite_region(
+        pix_region,
+        sprite_width,
+        sprite_height,
+        pixel_format->BitsPerPixel,
+        pixel_format->BytesPerPixel * sprite_width,
+        0,
+        0,
+        0,
+        0
+    );
+
     GPU_Image* texture_obstacle = GPU_CopyImageFromSurface(sprite_obstacle.Get());
     GPU_Image* texture_open = GPU_CopyImageFromSurface(sprite_open.Get());
     GPU_Image* texture_path = GPU_CopyImageFromSurface(sprite_path.Get());
     GPU_Image* texture_explore = GPU_CopyImageFromSurface(sprite_explore.Get());
     GPU_Image* texture_road = GPU_CopyImageFromSurface(sprite_road.Get());
+    GPU_Image* texture_region = GPU_CopyImageFromSurface(sprite_region.Get());
+
+    // "Additive" color modulation, ie, the color modulation value is directly
+    // added to the "real" color of the texture, to yield a new value. ie, if
+    // red == 255, and red-mod == 255, then the new value for red == 255 due
+    // to wrapping. Or red == 64 + red-mod == 128 -> red == 192.
+    GPU_SetBlending(texture_region, GPU_TRUE);
+    GPU_SetBlendEquation(texture_region, GPU_EQ_ADD, GPU_EQ_ADD);
 
     auto free_guard = Guard(
         [=]() {
@@ -217,6 +255,7 @@ void pathfind_gfx(
             GPU_FreeImage(texture_path);
             GPU_FreeImage(texture_explore);
             GPU_FreeImage(texture_road);
+            GPU_FreeImage(texture_region);
         }
     );
 
@@ -303,6 +342,10 @@ void pathfind_gfx(
 
     const auto block_lamb = [](const MapNode &node) -> bool {
         return !node.get_blocking();
+    };
+
+    uint64_t cur_region {
+        RegionColorer<Map, decltype(block_lamb)>::get_cur_region_color()
     };
 
     bool done = false;
@@ -399,7 +442,21 @@ void pathfind_gfx(
         // static, or changes rarely, we can cache this blitting as an image and
         // draw _that_ on subsequent frames, at least until anything changes.
         // This can provide a 50x+ speedup for large maps.
-        if (map_image == nullptr) {
+        //
+        // We also want to draw and cache the "coloring" for different regions.
+        // So whenever a new region calculation is performed, redraw and cache.
+        if (
+            map_image == nullptr ||
+            cur_region != RegionColorer<
+                Map, decltype(block_lamb)
+            >::get_cur_region_color()
+        ) {
+            cur_region = RegionColorer<
+                Map, decltype(block_lamb)
+            >::get_cur_region_color();
+
+            std::cout << "Drawing main map texture from scratch..." << std::endl;
+
             // Only rendering one texture at a time substantially improves
             // performance. Switching between two textures back and forth is 3x+
             // slower, worse on Windows than in VM.
@@ -430,9 +487,50 @@ void pathfind_gfx(
                 const uint32_t x_frame {x_node * sprite_width};
                 const uint32_t y_frame {y_node * sprite_height};
 
-                if (!node.get_blocking()) {
+                if (!node.get_blocking() && !node.get_region()) {
                     GPU_Blit(
                         texture_open,
+                        nullptr,
+                        screen,
+                        x_frame,
+                        y_frame
+                    );
+
+                    ++drawn_sprites;
+                }
+            }
+
+            // Color each of the distinct pathfinding regions.
+            for (const auto &node : map.get_nodes()) {
+                const uint32_t x_node {node.x_coord};
+                const uint32_t y_node {node.y_coord};
+
+                const uint32_t x_frame {x_node * sprite_width};
+                const uint32_t y_frame {y_node * sprite_height};
+
+                if (!node.get_blocking() && node.get_region()) {
+                    const uint64_t region = *node.get_region();
+
+                    // Modulate the color for the "region" texture by some
+                    // multiple of the region value itself. This depends on
+                    // wrapping of the unsigned byte for each color.
+                    //
+                    // Note that "modulating" a color by 255 is the same as
+                    // keeping the value the same. Otherwise, I _think_ because
+                    // we used `GPU_EQ_ADD` as the blend function, that we're
+                    // basically just "adding" each modulation to each color,
+                    // which is why 255 is no-op, because 255 + 255 == 255 in a
+                    // byte.
+                    GPU_SetRGBA(
+                        texture_region,
+                        200 + region * 8,
+                        200 + region * 16,
+                        200 + region * 24,
+                        255
+                    );
+
+                    GPU_Blit(
+                        texture_region,
                         nullptr,
                         screen,
                         x_frame,
@@ -576,73 +674,73 @@ void pathfind_gfx(
                     }
                 }
 
-                uint32_t loops {0};
-                for (const auto &[x_start, y_start] : open_spaces) {
-                    std::ranges::reverse_view rv_open_spaces {open_spaces};
+                // uint32_t loops {0};
+                // for (const auto &[x_start, y_start] : open_spaces) {
+                //     std::ranges::reverse_view rv_open_spaces {open_spaces};
 
-                    for (const auto &[x_end, y_end] : rv_open_spaces) {
-                        Pathfind<Map, decltype(block_lamb)> pathfinder(
-                            map,
-                            x_start, y_start,
-                            x_end, y_end,
-                            block_lamb
-                        );
+                //     for (const auto &[x_end, y_end] : rv_open_spaces) {
+                //         Pathfind<Map, decltype(block_lamb)> pathfinder(
+                //             map,
+                //             x_start, y_start,
+                //             x_end, y_end,
+                //             block_lamb
+                //         );
 
-                        start_pathfinding = std::chrono::steady_clock::now();
+                //         start_pathfinding = std::chrono::steady_clock::now();
 
-                        const auto path {pathfinder.get_path()};
+                //         const auto path {pathfinder.get_path()};
 
-                        end_pathfinding = std::chrono::steady_clock::now();
+                //         end_pathfinding = std::chrono::steady_clock::now();
 
-                         dur_pathfinding +=
-                             std::chrono::duration_cast<std::chrono::microseconds>(
-                                 end_pathfinding - start_pathfinding
-                             );
+                //          dur_pathfinding +=
+                //              std::chrono::duration_cast<std::chrono::microseconds>(
+                //                  end_pathfinding - start_pathfinding
+                //              );
 
-                        for (
-                            const auto explored_idx : Pathfind<Map, decltype(block_lamb)>::static_seen_nodes_idx
-                        ) {
-                            const auto [x_explore_map, y_explore_map] = get_node_xy(explored_idx, map.width);
+                //         for (
+                //             const auto explored_idx : Pathfind<Map, decltype(block_lamb)>::static_seen_nodes_idx
+                //         ) {
+                //             const auto [x_explore_map, y_explore_map] = get_node_xy(explored_idx, map.width);
 
-                            const uint32_t x_explore = x_explore_map * sprite_width;
-                            const uint32_t y_explore = y_explore_map * sprite_height;
+                //             const uint32_t x_explore = x_explore_map * sprite_width;
+                //             const uint32_t y_explore = y_explore_map * sprite_height;
 
-                            GPU_Blit(
-                                texture_explore,
-                                nullptr,
-                                screen,
-                                x_explore,
-                                y_explore
-                            );
+                //             GPU_Blit(
+                //                 texture_explore,
+                //                 nullptr,
+                //                 screen,
+                //                 x_explore,
+                //                 y_explore
+                //             );
 
-                            ++drawn_sprites;
-                        }
+                //             ++drawn_sprites;
+                //         }
 
-                        for (const auto &[x_path_map, y_path_map] : path) {
-                            const uint32_t x_path = x_path_map * sprite_width;
-                            const uint32_t y_path = y_path_map * sprite_height;
+                //         for (const auto &[x_path_map, y_path_map] : path) {
+                //             const uint32_t x_path = x_path_map * sprite_width;
+                //             const uint32_t y_path = y_path_map * sprite_height;
 
-                            GPU_Blit(
-                                texture_path,
-                                nullptr,
-                                screen,
-                                x_path,
-                                y_path
-                            );
+                //             GPU_Blit(
+                //                 texture_path,
+                //                 nullptr,
+                //                 screen,
+                //                 x_path,
+                //                 y_path
+                //             );
 
-                            ++drawn_sprites;
-                        }
+                //             ++drawn_sprites;
+                //         }
 
-                        ++loops;
+                //         ++loops;
 
-                        if (loops >= num_pathfinds) {
-                            goto DONE;
-                        }
-                    }
-                }
+                //         if (loops >= num_pathfinds) {
+                //             goto DONE;
+                //         }
+                //     }
+                // }
 
-                DONE:
-                ;
+                // DONE:
+                // ;
             }
         }
 
