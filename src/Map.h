@@ -110,7 +110,7 @@ public:
     static Map gen_rand_map(
         const uint32_t width = 64, const uint32_t height = 32
     ) {
-        std::uniform_int_distribution<> rng(0, 5);
+        std::uniform_int_distribution<> rng(0, 100);
         std::uniform_int_distribution<> rng_width(0, width);
         std::uniform_int_distribution<> rng_height(0, height);
 
@@ -121,7 +121,7 @@ public:
         for (uint32_t i = 0; i < map.nodes.capacity(); ++i) {
             const auto [x, y] = get_node_xy(i, map.width);
 
-            map.nodes.emplace_back(x, y, rng(Map::gen) > 3);
+            map.nodes.emplace_back(x, y, rng(Map::gen) > 65);
         }
 
         for (uint32_t i = 0; i < 10; ++i) {

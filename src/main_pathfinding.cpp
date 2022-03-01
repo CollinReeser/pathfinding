@@ -523,9 +523,9 @@ void pathfind_gfx(
                     // byte.
                     GPU_SetRGBA(
                         texture_region,
-                        200 + region * 8,
-                        200 + region * 16,
-                        200 + region * 24,
+                        200 + region * 13,
+                        200 + region * 17,
+                        200 + region * 19,
                         255
                     );
 
