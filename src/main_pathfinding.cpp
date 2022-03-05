@@ -6,6 +6,7 @@
 #include "Draw.h"
 #include "Map.h"
 #include "Util.h"
+#include "Pathfind.h"
 
 #include "imgui.h"
 #include "imgui_impl_sdl.h"
