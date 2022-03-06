@@ -3,6 +3,7 @@
 #include <ranges>
 #include <sstream>
 
+#include "Actor.h"
 #include "Draw.h"
 #include "Map.h"
 #include "Util.h"
@@ -57,7 +58,7 @@ void pathfind_gfx(
 
     Frame frame(map, registry);
 
-    // frame.draw_frame();
+    frame.draw_frame();
 
     const SDL_PixelFormat* const pixel_format = SDL_AllocFormat(
         SDL_PIXELFORMAT_ARGB8888
@@ -349,8 +350,21 @@ void pathfind_gfx(
         RegionColorer<Map, decltype(block_lamb)>::get_cur_region_color()
     };
 
+    TextureAtlas texture_atlas;
+    const auto &sprite_sheet = texture_atlas.add_spritesheet(
+        E_SpriteSheet::CharSheet,
+        8, 4, 4, 4,
+        "assets/walker-4x4x2.png"
+    );
+
+    Sprite sprite {sprite_sheet.get_sprite(0, 1, 1.0)};
+
+    bool click_down_this_frame {false};
+
     bool done = false;
     while (!done) {
+        click_down_this_frame = false;
+
         uint32_t drawn_sprites {0};
 
         start_clear = std::chrono::steady_clock::now();
@@ -404,6 +418,12 @@ void pathfind_gfx(
                 break;
 
             case SDL_MOUSEBUTTONDOWN:
+                click_down_this_frame = true;
+
+                std::cout
+                    << "Clicked: " << std::boolalpha << click_down_this_frame
+                    << std::noboolalpha << std::endl;
+
                 x_click = event.button.x;
                 y_click = event.button.y;
                 mouse_state = event.button.state;
