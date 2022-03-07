@@ -27,6 +27,9 @@
 
 // const uint32_t SCREEN_WIDTH {640};
 // const uint32_t SCREEN_HEIGHT {480};
+// const uint32_t SCREEN_WIDTH {640 * 3};
+// const uint32_t SCREEN_HEIGHT {480 * 2};
+
 const uint32_t SCREEN_WIDTH {640 * 3};
 const uint32_t SCREEN_HEIGHT {480 * 2};
 
@@ -40,8 +43,11 @@ void pathfind_gfx(
     NFont &font,
     ImFont* imgui_font
 ) {
-    const uint32_t sprite_width {4};
-    const uint32_t sprite_height {4};
+    const uint32_t sprite_width {16};
+    const uint32_t sprite_height {16};
+
+    // const uint32_t sprite_width {16};
+    // const uint32_t sprite_height {16};
 
     const uint32_t map_width {SCREEN_WIDTH / sprite_width};
     const uint32_t map_height {SCREEN_HEIGHT / sprite_height};
@@ -354,18 +360,20 @@ void pathfind_gfx(
     const auto &sprite_sheet = texture_atlas.add_spritesheet(
         E_SpriteSheet::CharSheet,
         8, 4, 4, 4,
-        "assets/walker-4x4x2.png"
+        "assets/walker-4x4x2x1.png"
     );
 
     Sprite sprite {sprite_sheet.get_sprite(0, 1, 1.0)};
 
     bool click_down_this_frame {false};
+    bool mouse_move_this_frame {false};
 
     bool done = false;
     while (!done) {
         uint32_t num_pathfinds {0};
 
         click_down_this_frame = false;
+        mouse_move_this_frame = false;
 
         uint32_t drawn_sprites {0};
 
@@ -414,8 +422,15 @@ void pathfind_gfx(
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
             case SDL_MOUSEMOTION:
+                mouse_move_this_frame = true;
+
                 x_mouse = event.motion.x;
                 y_mouse = event.motion.y;
+
+                // If we move the mouse, destroy all pathfinders.
+                for(const auto entity : registry.view<Actor, ActorPath>()) {
+                    registry.destroy(entity);
+                }
 
                 break;
 
@@ -439,6 +454,11 @@ void pathfind_gfx(
 
             case SDL_MOUSEBUTTONUP:
                 mouse_state = event.button.state;
+
+                // If we release the mouse-click, destroy all pathfinders.
+                for(const auto entity : registry.view<Actor, ActorPath>()) {
+                    registry.destroy(entity);
+                }
 
                 break;
 
@@ -697,6 +717,13 @@ void pathfind_gfx(
 
                         ++drawn_sprites;
                     }
+
+                    if (mouse_move_this_frame && path.size() > 1) {
+                        const auto entity = registry.create();
+
+                        registry.emplace<ActorPath>(entity, path);
+                        registry.emplace<Actor>(entity, E_Sprite::Walker, 5.0);
+                    }
                 }
 
                 // uint32_t loops {0};
@@ -841,6 +868,59 @@ void pathfind_gfx(
             dur_font = std::chrono::duration_cast<std::chrono::microseconds>(
                 end_font - start_font
             );
+        }
+
+        {
+            const auto view {registry.view<Actor, ActorPath>()};
+
+            const double delta_seconds = static_cast<double>(frame_dur.count()) / 1000000.0;
+
+            for (const auto &[entity, actor, actor_path]: view.each()) {
+                std::cout << "Delta seconds: [" << delta_seconds << "]" << std::endl;
+
+                if (!actor_path.is_done()) {
+                    actor_path.update_pos(
+                        actor.walk_speed_factor, delta_seconds, map
+                    );
+                }
+
+                const PathDelta path_delta {actor_path.get_path_delta()};
+
+                const double travelled = path_delta.travelled;
+
+                const uint32_t x_base = path_delta.base_tile.first;
+                const uint32_t y_base = path_delta.base_tile.second;
+                const uint32_t x_target = path_delta.target_tile.first;
+                const uint32_t y_target = path_delta.target_tile.second;
+
+                const double x_sprite_pos {
+                    (x_base < x_target)
+                        ? x_base + ((x_target - x_base) * travelled)
+                        : x_base - ((x_base - x_target) * travelled)
+                };
+                const double y_sprite_pos {
+                    (y_base < y_target)
+                        ? y_base + ((y_target - y_base) * travelled)
+                        : y_base - ((y_base - y_target) * travelled)
+                };
+
+                const double x_sprite_frame = x_sprite_pos * sprite_width;
+                const double y_sprite_frame = y_sprite_pos * sprite_height;
+
+                auto [sprite_texture, sprite_rect] {
+                    sprite.get_sprite_texture()
+                };
+
+                GPU_BlitScale(
+                    sprite_texture,
+                    &sprite_rect,
+                    screen,
+                    x_sprite_frame,
+                    y_sprite_frame,
+                    // Scale: x-factor, y-factor
+                    4, 4
+                );
+            }
         }
 
         start_flip = std::chrono::steady_clock::now();

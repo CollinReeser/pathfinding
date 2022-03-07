@@ -8,24 +8,29 @@
 
 #include <assert.h>
 
+[[nodiscard]]
 uint32_t get_node_index(
     const uint32_t x, const uint32_t y, const uint32_t width
 );
 
+[[nodiscard]]
 std::pair<uint32_t, uint32_t> get_node_xy(
     const uint32_t i, const uint32_t width
 );
 
+[[nodiscard]]
 double dist_euclidean(
     const uint32_t x1, const uint32_t y1,
     const uint32_t x2, const uint32_t y2
 );
 
+[[nodiscard]]
 double dist_chebyshev(
     const uint32_t x1, const uint32_t y1,
     const uint32_t x2, const uint32_t y2
 );
 
+[[nodiscard]]
 double dist_manhattan(
     const uint32_t x1, const uint32_t y1,
     const uint32_t x2, const uint32_t y2

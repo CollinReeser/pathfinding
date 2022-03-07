@@ -143,12 +143,26 @@ public:
             uint32_t x_road = rng_width(Map::gen);
             uint32_t x_extend = rng_width(Map::gen);
 
+            if (x_road >= map.width) {
+                x_road--;
+            }
+            if (x_extend >= map.width) {
+                x_extend--;
+            }
+
             if (x_road > x_extend) {
                 std::swap(x_road, x_extend);
             }
 
             uint32_t y_road = rng_height(Map::gen);
             uint32_t y_extend = rng_height(Map::gen);
+
+            if (y_road >= map.height) {
+                y_road--;
+            }
+            if (y_extend >= map.height) {
+                y_extend--;
+            }
 
             if (y_road > y_extend) {
                 std::swap(y_road, y_extend);

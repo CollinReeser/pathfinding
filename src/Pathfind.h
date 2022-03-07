@@ -3,6 +3,8 @@
 
 #include "Util.h"
 
+#include <limits>
+
 template <typename T, typename U, template <typename, typename> class Derived>
 class MapExplorer {
 protected:
@@ -381,6 +383,8 @@ private:
 
     std::vector<std::reference_wrapper<const ExploredNode>> to_explore;
 
+    double lowest_weight {std::numeric_limits<double>::max()};
+
 public:
     static inline std::unordered_set<uint32_t> static_seen_nodes_idx;
 
@@ -389,6 +393,9 @@ public:
     // Push a candidate neighbor node to the queue of nodes to explore next.
     //
     // NOTE: The `parent` argument is moved from.
+    //
+    // TODO: Add logic to re-enter previously-explored nodes into priority queue
+    // if f-score this time is lower than last time?
     void push_node(
         const uint32_t idx,
         const std::optional<std::reference_wrapper<const ExploredNode>> &&parent
@@ -411,9 +418,12 @@ public:
             // reduces the number of nodes explored, achieving much better
             // performance for only a small optimality penalty over long
             // distances.
-            const double heur_dist_to_end = dist_euclidean(
+            const double heur_dist_to_end = dist_chebyshev(
                 x_new, y_new, x_end, y_end
             );
+            // const double heur_dist_to_end = dist_euclidean(
+            //     x_new, y_new, x_end, y_end
+            // );
 
             if (parent) [[likely]] {
                 const ExploredNode &prev = *parent;
@@ -422,17 +432,26 @@ public:
                     get_node_xy(prev.idx, map.width)
                 };
 
-                const double dist_prev_to_new = dist_chebyshev(
+                const double dist_prev_to_new = dist_euclidean(
                     x_prev, y_prev, x_new, y_new
                 );
+                // const double dist_prev_to_new = dist_chebyshev(
+                //     x_prev, y_prev, x_new, y_new
+                // );
 
-                const double weight {get_map_nodes()[idx].get_weight()};
+                const double prev_weight {get_map_nodes()[prev.idx].get_weight()};
+                const double cur_weight {get_map_nodes()[idx].get_weight()};
+                const double weight = (prev_weight + cur_weight) / 2.0;
+
+                if (weight < lowest_weight) {
+                    lowest_weight = weight;
+                }
 
                 to_explore.emplace_back(
                     seen_nodes.emplace_back(
                         idx,
                         prev.dist_from_start + (dist_prev_to_new * weight),
-                        heur_dist_to_end * weight,
+                        heur_dist_to_end * lowest_weight,
                         std::move(parent)
                     )
                 );
@@ -442,7 +461,7 @@ public:
                     seen_nodes.emplace_back(
                         idx,
                         0,
-                        heur_dist_to_end,
+                        heur_dist_to_end * lowest_weight,
                         std::nullopt
                     )
                 );

@@ -7,15 +7,15 @@
 
 TEST(Util, NodeIndex) {
     // Width must be >0, and x-coordinate must fit in width.
-    EXPECT_DEATH(get_node_index(0u, 0u, 0), "Assertion");
-    EXPECT_DEATH(get_node_index(0u, 1u, 0), "Assertion");
-    EXPECT_DEATH(get_node_index(1u, 0u, 0), "Assertion");
-    EXPECT_DEATH(get_node_index(1u, 1u, 0), "Assertion");
+    EXPECT_DEATH( (void) get_node_index(0u, 0u, 0), "Assertion");
+    EXPECT_DEATH( (void) get_node_index(0u, 1u, 0), "Assertion");
+    EXPECT_DEATH( (void) get_node_index(1u, 0u, 0), "Assertion");
+    EXPECT_DEATH( (void) get_node_index(1u, 1u, 0), "Assertion");
 
-    EXPECT_DEATH(get_node_index(3u, 0u, 3), "Assertion");
-    EXPECT_DEATH(get_node_index(3u, 1u, 3), "Assertion");
-    EXPECT_DEATH(get_node_index(4u, 0u, 3), "Assertion");
-    EXPECT_DEATH(get_node_index(4u, 1u, 3), "Assertion");
+    EXPECT_DEATH( (void) get_node_index(3u, 0u, 3), "Assertion");
+    EXPECT_DEATH( (void) get_node_index(3u, 1u, 3), "Assertion");
+    EXPECT_DEATH( (void) get_node_index(4u, 0u, 3), "Assertion");
+    EXPECT_DEATH( (void) get_node_index(4u, 1u, 3), "Assertion");
 
     EXPECT_EQ(get_node_index(0u, 0u, 3), 0u);
     EXPECT_EQ(get_node_index(1u, 0u, 3), 1u);
