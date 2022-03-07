@@ -69,7 +69,46 @@ TEST(Util, Dist) {
             for (uint32_t y_end {0}; y_end < 100; ++y_end) {
                 for (uint32_t x_end {0}; x_end < 100; ++x_end) {
                     if (x_start == x_end && y_start == y_end) {
-                        continue;
+                        EXPECT_EQ(
+                            dist_chebyshev(x_start, y_start, x_end, y_end),
+                            0
+                        );
+                        EXPECT_EQ(
+                            dist_euclidean(x_start, y_start, x_end, y_end),
+                            0
+                        );
+                        EXPECT_EQ(
+                            dist_manhattan(x_start, y_start, x_end, y_end),
+                            0
+                        );
+                    }
+                    else if (x_start == x_end) {
+                        EXPECT_EQ(
+                            dist_chebyshev(x_start, y_start, x_end, y_end),
+                            dist_euclidean(x_start, y_start, x_end, y_end)
+                        );
+                        EXPECT_EQ(
+                            dist_chebyshev(x_start, y_start, x_end, y_end),
+                            dist_manhattan(x_start, y_start, x_end, y_end)
+                        );
+                        EXPECT_EQ(
+                            dist_euclidean(x_start, y_start, x_end, y_end),
+                            dist_manhattan(x_start, y_start, x_end, y_end)
+                        );
+                    }
+                    else if (y_start == y_end) {
+                        EXPECT_EQ(
+                            dist_chebyshev(x_start, y_start, x_end, y_end),
+                            dist_euclidean(x_start, y_start, x_end, y_end)
+                        );
+                        EXPECT_EQ(
+                            dist_chebyshev(x_start, y_start, x_end, y_end),
+                            dist_manhattan(x_start, y_start, x_end, y_end)
+                        );
+                        EXPECT_EQ(
+                            dist_euclidean(x_start, y_start, x_end, y_end),
+                            dist_manhattan(x_start, y_start, x_end, y_end)
+                        );
                     }
 
                     EXPECT_LE(
