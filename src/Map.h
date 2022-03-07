@@ -8,7 +8,6 @@
 #include <mutex>
 #include <optional>
 #include <random>
-#include <unordered_set>
 #include <vector>
 
 #include <assert.h>
@@ -36,6 +35,9 @@ private:
     bool blocking;
     std::optional<uint64_t> region;
     float weight;
+
+    // Index of neighbors.
+    std::vector<uint32_t> neighbors;
 
 public:
     MapNode(
@@ -74,6 +76,18 @@ public:
 
     void set_region(std::optional<uint64_t> &&region_new) {
         region = std::move(region_new);
+    }
+
+    void clear_region() {
+        region = std::nullopt;
+    }
+
+    void push_neighbor(const uint32_t idx_neighbor) {
+        neighbors.push_back(idx_neighbor);
+    }
+
+    const std::vector<uint32_t> &get_neighbors() const {
+        return neighbors;
     }
 
     friend Map;

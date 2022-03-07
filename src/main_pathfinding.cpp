@@ -305,7 +305,7 @@ void pathfind_gfx(
 
     std::chrono::microseconds dur_pathfinding {1};
 
-    const uint32_t num_pathfinds {100};
+    // const uint32_t pathfind_loops {100};
 
     // Does not cull the clipped area from calculations, but does make it
     // black.
@@ -363,6 +363,8 @@ void pathfind_gfx(
 
     bool done = false;
     while (!done) {
+        uint32_t num_pathfinds {0};
+
         click_down_this_frame = false;
 
         uint32_t drawn_sprites {0};
@@ -642,6 +644,8 @@ void pathfind_gfx(
                 start_pathfinding = std::chrono::steady_clock::now();
 
                 {
+                    ++num_pathfinds;
+
                     Pathfind<Map, decltype(block_lamb)> pathfinder(
                         map,
                         x_click_map, y_click_map,
@@ -700,6 +704,8 @@ void pathfind_gfx(
                 //     std::ranges::reverse_view rv_open_spaces {open_spaces};
 
                 //     for (const auto &[x_end, y_end] : rv_open_spaces) {
+                //         ++num_pathfinds;
+
                 //         Pathfind<Map, decltype(block_lamb)> pathfinder(
                 //             map,
                 //             x_start, y_start,
@@ -754,7 +760,7 @@ void pathfind_gfx(
 
                 //         ++loops;
 
-                //         if (loops >= num_pathfinds) {
+                //         if (loops >= pathfind_loops) {
                 //             goto DONE;
                 //         }
                 //     }
@@ -793,12 +799,14 @@ void pathfind_gfx(
             )
         );
 
-        font.draw(
-            screen, 0, font.getHeight() * 4, SDL_Color{0, 0, 0, 255},
-            "Pathfinding per (us): %d", static_cast<uint32_t>(
-                dur_pathfinding.count() / num_pathfinds
-            )
-        );
+        if (num_pathfinds > 0) {
+            font.draw(
+                screen, 0, font.getHeight() * 4, SDL_Color{0, 0, 0, 255},
+                "Pathfinding per (us): %d", static_cast<uint32_t>(
+                    dur_pathfinding.count() / num_pathfinds
+                )
+            );
+        }
 
         font.draw(
             screen, 0, font.getHeight() * 5, SDL_Color{0, 0, 0, 255},
