@@ -560,6 +560,8 @@ public:
             this->gen_neighbors();
         }
 
+        // TODO: Will this lie and say pathfinding fail if the end node is also
+        // the very last explorable node in the map?
         if (to_explore.size() == 0) {
             return {};
         }

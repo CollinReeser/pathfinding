@@ -27,6 +27,7 @@ class Map;
 struct MapNode {
 public:
     static inline const float DEFAULT_WEIGHT {1.3};
+    static inline const float ROAD_WEIGHT {0.7};
 
     const uint32_t x_coord;
     const uint32_t y_coord;
@@ -142,25 +143,25 @@ public:
             for (uint32_t i_x = x_road; i_x <= x_extend; ++i_x) {
                 const auto idx = get_node_index(i_x, y_road, map.width);
 
-                map.nodes[idx].set_weight(0.7);
+                map.nodes[idx].set_weight(node_t::ROAD_WEIGHT);
                 map.nodes[idx].set_blocking(false);
             }
             for (uint32_t i_y = y_road; i_y <= y_extend; ++i_y) {
                 const auto idx = get_node_index(x_road, i_y, map.width);
 
-                map.nodes[idx].set_weight(0.7);
+                map.nodes[idx].set_weight(node_t::ROAD_WEIGHT);
                 map.nodes[idx].set_blocking(false);
             }
             for (uint32_t i_x = x_road; i_x <= x_extend; ++i_x) {
                 const auto idx = get_node_index(i_x, y_extend, map.width);
 
-                map.nodes[idx].set_weight(0.7);
+                map.nodes[idx].set_weight(node_t::ROAD_WEIGHT);
                 map.nodes[idx].set_blocking(false);
             }
             for (uint32_t i_y = y_road; i_y <= y_extend; ++i_y) {
                 const auto idx = get_node_index(x_extend, i_y, map.width);
 
-                map.nodes[idx].set_weight(0.7);
+                map.nodes[idx].set_weight(node_t::ROAD_WEIGHT);
                 map.nodes[idx].set_blocking(false);
             }
         }

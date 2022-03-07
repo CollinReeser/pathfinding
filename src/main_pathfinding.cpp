@@ -802,8 +802,8 @@ void pathfind_gfx(
 
         font.draw(
             screen, 0, font.getHeight() * 5, SDL_Color{0, 0, 0, 255},
-            "Pathfinding total (ms): %d", static_cast<uint32_t>(
-                dur_pathfinding.count() / 1000
+            "Pathfinding total (us): %d", static_cast<uint32_t>(
+                dur_pathfinding.count()
             )
         );
 
